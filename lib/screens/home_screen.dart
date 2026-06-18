@@ -3,12 +3,29 @@ import 'package:flutter/material.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../widgets/pill_tag.dart';
-import 'need_detail_screen.dart';
-import 'post_need_screen.dart';
 
-/// Screen 2 — Buyer/Provider home dashboard with a dynamic needs feed.
+/// Screen 2 — Buyer/Provider home dashboard with a dynamic, filterable feed.
+///
+/// State is intentionally lifted: the list of [needs] and the [postSignal]
+/// are owned by the parent shell so newly posted needs appear instantly.
+/// This widget owns only its local UI state (the active filter chip).
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    required this.needs,
+    required this.postSignal,
+    required this.onOpenDetail,
+  });
+
+  /// The full, up-to-date feed provided by the parent shell.
+  final List<Need> needs;
+
+  /// Increments whenever a new need is posted, used to reset the filter so
+  /// the freshly added item is guaranteed to be visible.
+  final int postSignal;
+
+  /// Opens the detail screen for a tapped need.
+  final void Function(Need need) onOpenDetail;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -17,35 +34,105 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedFilter = 0;
 
-  void _openPostNeed() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PostNeedScreen()),
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A need was just posted — snap back to "Trending" so it shows on top.
+    if (widget.postSignal != oldWidget.postSignal && _selectedFilter != 0) {
+      setState(() => _selectedFilter = 0);
+    }
+  }
+
+  /// The feed after applying the currently selected filter chip.
+  List<Need> get _filteredNeeds {
+    final chip = MockData.filterChips[_selectedFilter];
+    switch (chip) {
+      case 'Trending':
+        return widget.needs;
+      case 'Urgent':
+        return widget.needs
+            .where((n) => n.urgency == Urgency.high)
+            .toList(growable: false);
+      default:
+        // Match the chip's first keyword against the need's category.
+        final keyword = chip.toLowerCase().split(' ').first;
+        return widget.needs
+            .where((n) => n.category.toLowerCase().contains(keyword))
+            .toList(growable: false);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Interactions
+  // --------------------------------------------------------------------------
+
+  void _showSnack(String message, {IconData icon = Icons.info_rounded}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.textPrimary,
+          content: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+  }
+
+  void _openNotifications() {
+    showGeneralDialog<void>(
+      context: context,
+      barrierLabel: 'Notifications',
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, __, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutBack);
+        return Transform.scale(
+          scale: 0.92 + curved.value * 0.08,
+          child: Opacity(
+            opacity: anim.value.clamp(0.0, 1.0),
+            child: const _NotificationsPanel(),
+          ),
+        );
+      },
     );
   }
 
-  void _openDetail(Need need) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => NeedDetailScreen(need: need)),
+  void _openProfileSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ProfileSheet(),
     );
   }
+
+  // --------------------------------------------------------------------------
+  // Build
+  // --------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      floatingActionButton: _GlowingFab(onPressed: _openPostNeed),
-      body: SafeArea(
-        bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _buildTopBar()),
-            SliverToBoxAdapter(child: _buildGreeting()),
-            SliverToBoxAdapter(child: _buildFilterChips()),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            _buildSectionHeader(),
-            _buildFeed(),
-            const SliverToBoxAdapter(child: SizedBox(height: 110)),
-          ],
-        ),
+    return SafeArea(
+      bottom: false,
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: _buildTopBar()),
+          SliverToBoxAdapter(child: _buildGreeting()),
+          SliverToBoxAdapter(child: _buildFilterChips()),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          _buildSectionHeader(),
+          _buildFeed(),
+          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+        ],
       ),
     );
   }
@@ -59,34 +146,43 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Row(
         children: [
-          Container(
-            height: 46,
-            width: 46,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [AppColors.accent, AppColors.accentLight],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.accent.withValues(alpha: 0.3),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
+          GestureDetector(
+            onTap: _openProfileSheet,
+            child: Container(
+              height: 46,
+              width: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [AppColors.accent, AppColors.accentLight],
                 ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: const Text(
-              'AK',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'AK',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
               ),
             ),
           ),
           const Spacer(),
-          _buildIconButton(Icons.tune_rounded, onTap: () {}),
+          _buildIconButton(
+            Icons.tune_rounded,
+            onTap: () => _showSnack(
+              'Advanced filters are coming soon.',
+              icon: Icons.tune_rounded,
+            ),
+          ),
           const SizedBox(width: 12),
           _buildNotificationButton(),
         ],
@@ -113,7 +209,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        _buildIconButton(Icons.notifications_none_rounded, onTap: () {}),
+        _buildIconButton(
+          Icons.notifications_none_rounded,
+          onTap: _openNotifications,
+        ),
         Positioned(
           right: 6,
           top: 6,
@@ -213,6 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSectionHeader() {
+    final count = _filteredNeeds.length;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
@@ -220,14 +320,17 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Active Needs',
+              'Active Needs ($count)',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            Text(
-              'See all',
-              style: TextStyle(
-                color: AppColors.accent,
-                fontWeight: FontWeight.w700,
+            GestureDetector(
+              onTap: () => _showSnack('Showing all active needs.'),
+              child: Text(
+                'See all',
+                style: TextStyle(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -237,15 +340,60 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeed() {
+    final needs = _filteredNeeds;
+
+    if (needs.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 40, 20, 0),
+          child: Column(
+            children: [
+              Container(
+                height: 84,
+                width: 84,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Icon(
+                  Icons.search_off_rounded,
+                  size: 38,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'No needs in this category yet',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Try another filter or post the first need here.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       sliver: SliverList.separated(
-        itemCount: MockData.needs.length,
+        itemCount: needs.length,
         separatorBuilder: (_, __) => const SizedBox(height: 16),
-        itemBuilder: (context, index) => _NeedCard(
-          need: MockData.needs[index],
-          onTap: () => _openDetail(MockData.needs[index]),
-        ),
+        itemBuilder: (context, index) {
+          final need = needs[index];
+          return _NeedCard(
+            key: ValueKey(need.id),
+            need: need,
+            onTap: () => widget.onOpenDetail(need),
+          );
+        },
       ),
     );
   }
@@ -257,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 /// A premium card representing a single need in the feed.
 class _NeedCard extends StatelessWidget {
-  const _NeedCard({required this.need, required this.onTap});
+  const _NeedCard({super.key, required this.need, required this.onTap});
 
   final Need need;
   final VoidCallback onTap;
@@ -366,74 +514,239 @@ class _NeedCard extends StatelessWidget {
 }
 
 // ----------------------------------------------------------------------------
-// Glowing FAB
+// Notifications panel (animated dialog)
 // ----------------------------------------------------------------------------
 
-/// An extended FAB with a soft, continuously breathing glow.
-class _GlowingFab extends StatefulWidget {
-  const _GlowingFab({required this.onPressed});
+class _NotificationItem {
+  const _NotificationItem({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.body,
+    required this.time,
+  });
 
-  final VoidCallback onPressed;
-
-  @override
-  State<_GlowingFab> createState() => _GlowingFabState();
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String body;
+  final String time;
 }
 
-class _GlowingFabState extends State<_GlowingFab>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+class _NotificationsPanel extends StatelessWidget {
+  const _NotificationsPanel();
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  static const _items = <_NotificationItem>[
+    _NotificationItem(
+      icon: Icons.local_offer_rounded,
+      color: AppColors.accent,
+      title: 'New offer received',
+      body: 'A provider offered PKR 78,000 on your Flutter MVP need.',
+      time: '2m ago',
+    ),
+    _NotificationItem(
+      icon: Icons.bolt_rounded,
+      color: AppColors.urgentHigh,
+      title: 'Your need is trending',
+      body: 'Your AC repair request is in the top 5 today.',
+      time: '40m ago',
+    ),
+    _NotificationItem(
+      icon: Icons.verified_rounded,
+      color: AppColors.primary,
+      title: 'Profile verified',
+      body: 'Your account has been verified. You now rank higher.',
+      time: '3h ago',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final glow = 14 + _controller.value * 16;
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.45),
-                blurRadius: glow,
-                spreadRadius: _controller.value * 2,
-                offset: const Offset(0, 8),
+    final textTheme = Theme.of(context).textTheme;
+    return Dialog(
+      backgroundColor: AppColors.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Notifications', style: textTheme.titleLarge),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            ..._items.map(
+              (n) => Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 42,
+                      width: 42,
+                      decoration: BoxDecoration(
+                        color: n.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(n.icon, color: n.color, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  n.title,
+                                  style: textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              Text(
+                                n.time,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            n.body,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          child: child,
-        );
-      },
-      child: FloatingActionButton.extended(
-        onPressed: widget.onPressed,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        highlightElevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
-        ),
-        icon: const Icon(Icons.add_rounded, size: 24),
-        label: const Text(
-          'Post a Need',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Profile sheet (modal bottom sheet)
+// ----------------------------------------------------------------------------
+
+class _ProfileSheet extends StatelessWidget {
+  const _ProfileSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 5,
+              width: 44,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Container(
+              height: 76,
+              width: 76,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [AppColors.accent, AppColors.accentLight],
+                ),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'AK',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Ayesha Khan', style: textTheme.titleLarge),
+            const SizedBox(height: 2),
+            Text(
+              'ayesha.k@email.com',
+              style: textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 22),
+            const _ProfileRow(icon: Icons.list_alt_rounded, label: 'My Needs'),
+            const _ProfileRow(
+                icon: Icons.bookmark_rounded, label: 'Saved Offers'),
+            const _ProfileRow(icon: Icons.settings_rounded, label: 'Settings'),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        height: 42,
+        width: 42,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: AppColors.primary, size: 22),
+      ),
+      title: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded,
+          color: AppColors.textTertiary),
+      onTap: () => Navigator.of(context).pop(),
     );
   }
 }

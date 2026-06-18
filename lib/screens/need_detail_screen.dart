@@ -69,7 +69,8 @@ class NeedDetailScreen extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               need.title,
-              style: textTheme.headlineMedium?.copyWith(fontSize: 26, height: 1.25),
+              style: textTheme.headlineMedium
+                  ?.copyWith(fontSize: 26, height: 1.25),
             ),
             const SizedBox(height: 18),
             _buildAuthorRow(context),
@@ -228,8 +229,8 @@ class NeedDetailScreen extends StatelessWidget {
                       color: AppColors.surfaceMuted,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(item.$1,
-                        size: 20, color: AppColors.textSecondary),
+                    child:
+                        Icon(item.$1, size: 20, color: AppColors.textSecondary),
                   ),
                   const SizedBox(width: 14),
                   Column(

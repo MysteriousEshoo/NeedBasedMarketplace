@@ -61,22 +61,37 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
     }
   }
 
+  /// Assembles the user's input into a [Need] and returns it to the shell,
+  /// which prepends it to the in-memory feed.
+  Need _buildNeed() {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final budget = int.tryParse(
+          _budgetController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+        ) ??
+        0;
+
+    return Need(
+      id: 'n${DateTime.now().millisecondsSinceEpoch}',
+      title: title.isEmpty ? 'Untitled need' : title,
+      description:
+          description.isEmpty ? 'No description provided yet.' : description,
+      category: _selectedCategory ?? MockData.categories.first,
+      budget: budget,
+      timeElapsed: 'Just now',
+      urgency: _selectedUrgency,
+      authorName: 'Ayesha K.',
+      offers: 0,
+    );
+  }
+
   Future<void> _publish() async {
     setState(() => _isPublishing = true);
     await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
     setState(() => _isPublishing = false);
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.primary,
-        content: const Text('Your need has been published!'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
+    // Hand the freshly created need back to the shell.
+    Navigator.of(context).pop<Need>(_buildNeed());
   }
 
   @override

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'main_shell.dart';
 import '../theme/app_colors.dart';
 import '../widgets/primary_loading_button.dart';
 import 'home_screen.dart';
@@ -55,7 +55,7 @@ class _AuthScreenState extends State<AuthScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, animation, __) => const HomeScreen(),
+        pageBuilder: (_, animation, __) => const MainShell(),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
           opacity: animation,
           child: SlideTransition(
@@ -299,8 +299,8 @@ class _AuthScreenState extends State<AuthScreen>
         const SizedBox(height: 14),
         OutlinedButton.icon(
           onPressed: () {},
-          icon: const Icon(Icons.phone_iphone_rounded,
-              color: AppColors.primary),
+          icon:
+              const Icon(Icons.phone_iphone_rounded, color: AppColors.primary),
           label: const Text('Continue with phone number'),
         ),
       ],
