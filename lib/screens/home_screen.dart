@@ -5,10 +5,6 @@ import '../theme/app_colors.dart';
 import '../widgets/pill_tag.dart';
 
 /// Screen 2 — Buyer/Provider home dashboard with a dynamic, filterable feed.
-///
-/// State is intentionally lifted: the list of [needs] and the [postSignal]
-/// are owned by the parent shell so newly posted needs appear instantly.
-/// This widget owns only its local UI state (the active filter chip).
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -33,13 +29,31 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedFilter = 0;
+  String _searchQuery = ''; // FIXED: Added query string to track search input
+  final _searchController =
+      TextEditingController(); // FIXED: Controller for clear button
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     // A need was just posted — snap back to "Trending" so it shows on top.
     if (widget.postSignal != oldWidget.postSignal && _selectedFilter != 0) {
-      setState(() => _selectedFilter = 0);
+      setState(() {
+        _selectedFilter = 0;
+        _searchQuery = '';
+        _searchController.clear();
+      });
     }
   }
 
@@ -63,23 +77,34 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// The feed after applying the currently selected filter chip.
+  /// FIXED: The feed now filters through BOTH active category chips AND the search bar input!
   List<Need> get _filteredNeeds {
     final chip = MockData.filterChips[_selectedFilter];
-    switch (chip) {
-      case 'Trending':
-        return widget.needs;
-      case 'Urgent':
-        return widget.needs
-            .where((n) => n.urgency == Urgency.high)
-            .toList(growable: false);
-      default:
-        // Match the chip's first keyword against the need's category.
-        final keyword = chip.toLowerCase().split(' ').first;
-        return widget.needs
-            .where((n) => n.category.toLowerCase().contains(keyword))
-            .toList(growable: false);
+    List<Need> activeList = widget.needs;
+
+    // 1. First step: Filter by category chip selection
+    if (chip == 'Urgent') {
+      activeList =
+          widget.needs.where((n) => n.urgency == Urgency.high).toList();
+    } else if (chip != 'Trending') {
+      final keyword = chip.toLowerCase().split(' ').first;
+      activeList = widget.needs
+          .where((n) => n.category.toLowerCase().contains(keyword))
+          .toList();
     }
+
+    // 2. Second step: Apply live text search matching title or description
+    if (_searchQuery.isNotEmpty) {
+      activeList = activeList.where((n) {
+        final titleMatch =
+            n.title.toLowerCase().contains(_searchQuery.toLowerCase());
+        final descMatch =
+            n.description.toLowerCase().contains(_searchQuery.toLowerCase());
+        return titleMatch || descMatch;
+      }).toList();
+    }
+
+    return activeList;
   }
 
   // --------------------------------------------------------------------------
@@ -127,14 +152,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openProfileSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _ProfileSheet(),
-    );
-  }
-
   // --------------------------------------------------------------------------
   // Build
   // --------------------------------------------------------------------------
@@ -142,7 +159,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      bottom: false,
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _buildTopBar()),
@@ -166,8 +182,10 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Row(
         children: [
+          // FIXED: Tapping avatar acts as a quick shortcut info hint now
           GestureDetector(
-            onTap: _openProfileSheet,
+            onTap: () =>
+                _showSnack('Profile tab is located at the bottom menu!'),
             child: Container(
               height: 46,
               width: 46,
@@ -290,6 +308,12 @@ class _HomeScreenState extends State<HomeScreen> {
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: TextField(
+        controller: _searchController,
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val.trim();
+          });
+        },
         decoration: InputDecoration(
           hintText: 'Search for requirements, skills, or tasks...',
           hintStyle: const TextStyle(
@@ -304,6 +328,18 @@ class _HomeScreenState extends State<HomeScreen> {
               size: 22,
             ),
           ),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded,
+                      color: AppColors.textSecondary),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
           prefixIconConstraints: const BoxConstraints(minHeight: 48),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
@@ -405,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             GestureDetector(
               onTap: () => _showSnack('Showing all active needs.'),
-              child: Text(
+              child: const Text(
                 'See all',
                 style: TextStyle(
                   color: AppColors.accent,
@@ -444,12 +480,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 18),
               Text(
-                'No needs in this category yet',
+                'No matching results found',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 6),
               Text(
-                'Try another filter or post the first need here.',
+                'Try another search keyword or adjust your category filter.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.textSecondary,
@@ -483,7 +519,6 @@ class _HomeScreenState extends State<HomeScreen> {
 // Need card
 // ----------------------------------------------------------------------------
 
-/// A premium card representing a single need in the feed.
 class _NeedCard extends StatelessWidget {
   const _NeedCard({super.key, required this.need, required this.onTap});
 
@@ -594,7 +629,7 @@ class _NeedCard extends StatelessWidget {
 }
 
 // ----------------------------------------------------------------------------
-// Notifications panel (animated dialog)
+// Notifications panel
 // ----------------------------------------------------------------------------
 
 class _NotificationItem {
@@ -719,114 +754,6 @@ class _NotificationsPanel extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ----------------------------------------------------------------------------
-// Profile sheet (modal bottom sheet)
-// ----------------------------------------------------------------------------
-
-class _ProfileSheet extends StatelessWidget {
-  const _ProfileSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              height: 5,
-              width: 44,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(height: 22),
-            Container(
-              height: 76,
-              width: 76,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [AppColors.accent, AppColors.accentLight],
-                ),
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'AK',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 24,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text('Ayesha Khan', style: textTheme.titleLarge),
-            const SizedBox(height: 2),
-            Text(
-              'ayesha.k@email.com',
-              style: textTheme.bodyMedium
-                  ?.copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 22),
-            const _ProfileRow(icon: Icons.list_alt_rounded, label: 'My Needs'),
-            const _ProfileRow(
-                icon: Icons.bookmark_rounded, label: 'Saved Offers'),
-            const _ProfileRow(icon: Icons.settings_rounded, label: 'Settings'),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                label: const Text('Close'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        height: 42,
-        width: 42,
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: AppColors.primary, size: 22),
-      ),
-      title: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded,
-          color: AppColors.textTertiary),
-      onTap: () => Navigator.of(context).pop(),
     );
   }
 }

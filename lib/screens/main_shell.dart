@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
 import 'post_need_screen.dart';
+import 'profile_screen.dart';
 
 /// The root authenticated shell.
 ///
@@ -19,6 +21,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   /// Mutable feed — seeded from mock data, mutated in memory at runtime.
+  /// FIXED: Changed from seedNeeds() to standard List.from(MockData.needs)
   final List<Need> _needs = List<Need>.from(MockData.needs);
 
   int _tabIndex = 0;
@@ -50,8 +53,8 @@ class _MainShellState extends State<MainShell> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: AppColors.primary,
           duration: const Duration(seconds: 3),
-          content: Row(
-            children: const [
+          content: const Row(
+            children: [
               Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
               Expanded(
@@ -114,13 +117,7 @@ class _MainShellState extends State<MainShell> {
                 'All your conversations with providers will live here, with '
                 'real-time updates and read receipts.',
           ),
-          const _PlaceholderTab(
-            icon: Icons.person_rounded,
-            title: 'Profile',
-            message:
-                'Manage your account, reviews and saved needs from a single '
-                'polished profile hub.',
-          ),
+          const ProfileScreen(), // This is index 4
         ],
       ),
       bottomNavigationBar: _BottomNav(
@@ -135,8 +132,6 @@ class _MainShellState extends State<MainShell> {
 // Bottom navigation
 // ----------------------------------------------------------------------------
 
-/// A custom, notched bottom navigation bar with five slots — the middle slot
-/// is left empty to make room for the docked [_GlowingFab].
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
 
@@ -155,7 +150,6 @@ class _BottomNav extends StatelessWidget {
         ],
       ),
       child: SafeArea(
-        top: false,
         child: SizedBox(
           height: 64,
           child: Row(
@@ -177,13 +171,13 @@ class _BottomNav extends StatelessWidget {
               _NavItem(
                 icon: Icons.chat_bubble_rounded,
                 label: 'Messages',
-                selected: currentIndex == 3,
+                selected: currentIndex == 3, // FIXED: Matches the list index 3
                 onTap: () => onTap(3),
               ),
               _NavItem(
                 icon: Icons.person_rounded,
                 label: 'Profile',
-                selected: currentIndex == 4,
+                selected: currentIndex == 4, // FIXED: Matches the list index 4
                 onTap: () => onTap(4),
               ),
             ],
@@ -242,8 +236,6 @@ class _NavItem extends StatelessWidget {
 // Placeholder tabs
 // ----------------------------------------------------------------------------
 
-/// A graceful empty state used by the secondary tabs so navigation always
-/// lands on something polished rather than a blank screen.
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({
     required this.icon,
@@ -298,8 +290,6 @@ class _PlaceholderTab extends StatelessWidget {
 // Glowing FAB
 // ----------------------------------------------------------------------------
 
-/// A circular FAB with a soft, continuously breathing glow, docked into the
-/// notch of the bottom navigation bar.
 class _GlowingFab extends StatefulWidget {
   const _GlowingFab({required this.onPressed});
 
