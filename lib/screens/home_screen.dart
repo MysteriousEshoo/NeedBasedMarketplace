@@ -43,6 +43,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Maps a filter chip label to its corresponding icon.
+  IconData _getChipIcon(String chipLabel) {
+    switch (chipLabel) {
+      case 'Trending':
+        return Icons.local_fire_department_rounded;
+      case 'Urgent':
+        return Icons.bolt_rounded;
+      case 'Tech':
+        return Icons.code_rounded;
+      case 'Tutoring':
+        return Icons.school_rounded;
+      case 'Services':
+        return Icons.handshake_rounded;
+      case 'Repairs':
+        return Icons.build_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
   /// The feed after applying the currently selected filter chip.
   List<Need> get _filteredNeeds {
     final chip = MockData.filterChips[_selectedFilter];
@@ -258,7 +278,54 @@ class _HomeScreenState extends State<HomeScreen> {
             'What do you need today?',
             style: textTheme.headlineMedium?.copyWith(fontSize: 26),
           ),
+          const SizedBox(height: 16),
+          _buildSearchBar(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'Search for requirements, skills, or tasks...',
+          hintStyle: const TextStyle(
+            color: AppColors.textTertiary,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: const Padding(
+            padding: EdgeInsets.only(left: 14, right: 10),
+            child: Icon(
+              Icons.search_rounded,
+              color: AppColors.textSecondary,
+              size: 22,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minHeight: 48),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(
+              color: AppColors.primary,
+              width: 1.5,
+            ),
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(0, 14, 16, 14),
+        ),
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -273,12 +340,14 @@ class _HomeScreenState extends State<HomeScreen> {
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final selected = index == _selectedFilter;
+          final chipLabel = MockData.filterChips[index];
+          final chipIcon = _getChipIcon(chipLabel);
           return GestureDetector(
             onTap: () => setState(() => _selectedFilter = index),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: selected ? AppColors.primary : AppColors.surface,
@@ -296,13 +365,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       ]
                     : null,
               ),
-              child: Text(
-                MockData.filterChips[index],
-                style: TextStyle(
-                  color: selected ? Colors.white : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    chipIcon,
+                    size: 18,
+                    color: selected ? Colors.white : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    chipLabel,
+                    style: TextStyle(
+                      color: selected ? Colors.white : AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
