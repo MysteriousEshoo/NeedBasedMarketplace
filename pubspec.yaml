@@ -11,6 +11,12 @@ dependencies:
     sdk: flutter
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
+  # Firebase Core (Required for all Firebase services)
+  firebase_core: ^3.3.0
+  # Firebase Authentication (Login ke liye)
+  firebase_auth: ^5.1.0
+  # Cloud Firestore (Data save karne ke liye)
+  cloud_firestore: ^5.2.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

@@ -3,6 +3,7 @@ import 'main_shell.dart';
 import '../theme/app_colors.dart';
 import '../widgets/primary_loading_button.dart';
 import 'home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Screen 1 — Premium dual authentication interface.
 ///
@@ -49,27 +50,55 @@ class _AuthScreenState extends State<AuthScreen>
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, animation, __) => const MainShell(),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.04),
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+
+    try {
+      if (_isLogin) {
+        // Asli Firebase Login Logic
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+      } else {
+        // Asli Firebase Sign Up (Register) Logic
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      // Agar login/signup successful ho jaye, to agli screen par le jao
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 450),
+          pageBuilder: (_, animation, __) => const MainShell(),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                  parent: animation, curve: Curves.easeOutCubic)),
+              child: child,
             ),
-            child: child,
           ),
         ),
-      ),
-    );
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      // Agar koi error aaye (jaise wrong password ya email already in use), to alert dikhao
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'An error occurred. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
