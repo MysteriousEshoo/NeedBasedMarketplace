@@ -158,18 +158,169 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildTopBar()),
-          SliverToBoxAdapter(child: _buildGreeting()),
-          SliverToBoxAdapter(child: _buildFilterChips()),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          _buildSectionHeader(),
-          _buildFeed(),
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
-        ],
-      ),
+    // Pure page ke liye ek hi live database stream setup
+    final Query dbQuery = FirebaseDatabase.instance.ref().child('needs');
+
+    return StreamBuilder(
+      stream: dbQuery.onValue,
+      builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+        List<Need> liveNeeds = [];
+
+        // 1. Firebase se fresh data pull karna
+        if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+          final Map<dynamic, dynamic> map =
+              snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+          map.forEach((key, value) {
+            final data = Map<String, dynamic>.from(value as Map);
+            liveNeeds.add(
+              Need(
+                id: key,
+                title: data['title'] ?? '',
+                description: data['description'] ?? '',
+                category: data['category'] ?? '',
+                budget: data['budget'] ?? 0,
+                timeElapsed: 'Just now',
+                urgency: data['urgency'] == 'high'
+                    ? Urgency.high
+                    : (data['urgency'] == 'low' ? Urgency.low : Urgency.medium),
+                authorName: data['authorName'] ?? 'Anonymous',
+                offers: data['offers'] ?? 0,
+              ),
+            );
+          });
+          liveNeeds = liveNeeds.reversed.toList();
+        }
+
+        // 2. Filters aur Search Query apply karna
+        final chip = MockData.filterChips[_selectedFilter];
+        List<Need> activeList = liveNeeds;
+
+        if (chip == 'Urgent') {
+          activeList =
+              liveNeeds.where((n) => n.urgency == Urgency.high).toList();
+        } else if (chip != 'Trending') {
+          final keyword = chip.toLowerCase().split(' ').first;
+          activeList = liveNeeds
+              .where((n) => n.category.toLowerCase().contains(keyword))
+              .toList();
+        }
+
+        if (_searchQuery.isNotEmpty) {
+          activeList = activeList.where((n) {
+            final titleMatch =
+                n.title.toLowerCase().contains(_searchQuery.toLowerCase());
+            final descMatch = n.description
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase());
+            return titleMatch || descMatch;
+          }).toList();
+        }
+
+        // 3. Poori screen ka layout render karna
+        return SafeArea(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _buildTopBar()),
+              SliverToBoxAdapter(child: _buildGreeting()),
+              SliverToBoxAdapter(child: _buildFilterChips()),
+              const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+              // LIVE COUNTING HEADER: Ab activeList.length bilkul accurate count dikhayegi!
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Active Needs (${activeList.length})',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      GestureDetector(
+                        onTap: () => _showSnack('Showing all active needs.'),
+                        child: const Text(
+                          'See all',
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // LOADING STATE: Agar data load ho raha ho
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                )
+
+              // EMPTY STATE: Agar koi post na mile
+              else if (activeList.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 40, 20, 0),
+                    child: Column(
+                      children: [
+                        Container(
+                          height: 84,
+                          width: 84,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Icon(
+                            Icons.search_off_rounded,
+                            size: 38,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text('No matching results found',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Try another search keyword or adjust your category filter.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+
+              // LIVE FEED LIST
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList.separated(
+                    itemCount: activeList.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (context, index) {
+                      final need = activeList[index];
+                      return _NeedCard(
+                        key: ValueKey(need.id),
+                        need: need,
+                        onTap: () => widget.onOpenDetail(need),
+                      );
+                    },
+                  ),
+                ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
+            ],
+          ),
+        );
+      },
     );
   }
 

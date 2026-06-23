@@ -34,8 +34,14 @@ class _AuthScreenState extends State<AuthScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this)
-      ..addListener(() => setState(() {}));
+    _tabController = TabController(length: 2, vsync: this);
+
+    // Tab change hone par state ko refresh karne ke liye listener
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {});
+      }
+    });
   }
 
   @override

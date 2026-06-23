@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-
+import 'screens/main_shell.dart';
 import 'screens/auth_screen.dart';
 import 'theme/app_theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +35,25 @@ class NeedMarketplaceApp extends StatelessWidget {
       title: 'NeedHub',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const AuthScreen(),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // 1. Agar internet slow ho aur token check ho raha ho, to loader dikhao
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          // 2. Agar snapshot mien data (user) maujood hai, to direct Home mien le jao
+          if (snapshot.hasData) {
+            return const MainShell(); // Ya jo bhi tumhari main dashboard class hai
+          }
+
+          // 3. Agar koi user login nahi hai, to login screen dikhao
+          return const AuthScreen();
+        },
+      ),
     );
   }
 }
