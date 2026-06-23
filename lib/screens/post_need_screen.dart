@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../widgets/primary_loading_button.dart';
@@ -87,11 +87,58 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
 
   Future<void> _publish() async {
     setState(() => _isPublishing = true);
-    await Future.delayed(const Duration(milliseconds: 1400));
-    if (!mounted) return;
-    setState(() => _isPublishing = false);
-    // Hand the freshly created need back to the shell.
-    Navigator.of(context).pop<Need>(_buildNeed());
+
+    try {
+      // 1. Inputs se data collect karein
+      final title = _titleController.text.trim();
+      final description = _descriptionController.text.trim();
+      final budget = int.tryParse(
+              _budgetController.text.replaceAll(RegExp(r'[^0-9]'), '')) ??
+          0;
+
+      // 2. Map tayaar karein jo database mein save hoga
+      final Map<String, dynamic> needData = {
+        'title': title.isEmpty ? 'Untitled need' : title,
+        'description':
+            description.isEmpty ? 'No description provided yet.' : description,
+        'category': _selectedCategory ?? 'General',
+        'budget': budget,
+        'urgency':
+            _selectedUrgency.toString().split('.').last, // low, medium, ya high
+        'authorName': 'Ayesha K.', // Baad mein ise logged-in user se badlein ge
+        'timestamp': ServerValue.timestamp, // Firebase ka server time
+        'offers': 0,
+      };
+
+      // 3. Realtime Database mein 'needs' naam ka folder bana kar push karein
+      final DatabaseReference dbRef =
+          FirebaseDatabase.instance.ref().child('needs');
+      await dbRef.push().set(needData);
+
+      if (!mounted) return;
+      setState(() => _isPublishing = false);
+
+      // 4. Data save hone ke baad screen band karein
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚡ Need Published Successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPublishing = false);
+
+      // Agar internet ya kisi wajah se fail ho jaye
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error publishing: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
