@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+
+import '../models/need_model.dart';
 import '../theme/app_colors.dart';
+import 'need_detail_screen.dart'; // REQUIRED: For redirection click
 
 /// Premium, scrollable profile screen with gradient header, stats, and menu.
 class ProfileScreen extends StatefulWidget {
@@ -72,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ClipOval(
                   child: Container(
                     color: AppColors.primaryLight.withValues(alpha: 0.1),
-                    child: Center(
+                    child: const Center(
                       child: Icon(
                         Icons.person_rounded,
                         size: 60,
@@ -185,11 +190,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border, width: 1),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               color: AppColors.shadow,
               blurRadius: 8,
-              offset: const Offset(0, 2),
+              offset: Offset(0, 2),
             ),
           ],
         ),
@@ -223,34 +228,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Clean menu list with rounded tiles and shadows.
+  /// Clean menu list with rounded tiles and live navigation redirection.
   Widget _buildMenuList() {
     final menuItems = [
-      (
-        icon: Icons.description_rounded,
-        label: 'My Needs',
-        action: () => _showMenuAction('My Needs'),
-      ),
-      (
-        icon: Icons.bookmark_rounded,
-        label: 'Saved Offers',
-        action: () => _showMenuAction('Saved Offers'),
-      ),
-      (
-        icon: Icons.credit_card_rounded,
-        label: 'Payment Methods',
-        action: () => _showMenuAction('Payment Methods'),
-      ),
-      (
-        icon: Icons.settings_rounded,
-        label: 'Settings',
-        action: () => _showMenuAction('Settings'),
-      ),
-      (
-        icon: Icons.help_center_rounded,
-        label: 'Help & Support',
-        action: () => _showMenuAction('Help & Support'),
-      ),
+      {
+        'icon': Icons.description_rounded,
+        'label': 'My Needs',
+        'action': () => _showMenuAction('My Needs'),
+      },
+      {
+        'icon': Icons.bookmark_rounded,
+        'label': 'Saved Offers',
+        'action': () {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user == null) return;
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => _StandaloneSavedNeedsScreen(),
+            ),
+          );
+        },
+      },
+      {
+        'icon': Icons.credit_card_rounded,
+        'label': 'Payment Methods',
+        'action': () => _showMenuAction('Payment Methods'),
+      },
+      {
+        'icon': Icons.settings_rounded,
+        'label': 'Settings',
+        'action': () => _showMenuAction('Settings'),
+      },
+      {
+        'icon': Icons.help_center_rounded,
+        'label': 'Help & Support',
+        'action': () => _showMenuAction('Help & Support'),
+      },
     ];
 
     return Padding(
@@ -264,7 +279,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: EdgeInsets.only(
                   bottom: index < menuItems.length - 1 ? 10 : 0),
               child: GestureDetector(
-                onTap: item.action,
+                onTap: item['action'] as VoidCallback,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -272,31 +287,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.border, width: 0.8),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: AppColors.shadow,
                         blurRadius: 6,
-                        offset: const Offset(0, 1),
+                        offset: Offset(0, 1),
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        item.icon,
+                        item['icon'] as IconData,
                         color: AppColors.primary,
                         size: 22,
                       ),
                       const SizedBox(width: 14),
                       Text(
-                        item.label,
+                        item['label'] as String,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
                       ),
                       const Spacer(),
-                      Icon(
+                      const Icon(
                         Icons.arrow_forward_ios_rounded,
                         color: AppColors.textTertiary,
                         size: 16,
@@ -338,7 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
+              const Icon(
                 Icons.logout_rounded,
                 color: AppColors.urgentHigh,
                 size: 20,
@@ -394,7 +409,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: BoxShape.circle,
                   color: AppColors.urgentHigh.withValues(alpha: 0.1),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.logout_rounded,
                   color: AppColors.urgentHigh,
                   size: 28,
@@ -463,14 +478,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: AppColors.urgentHigh,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(
+                        child: const Text(
                           'Logout',
                           textAlign: TextAlign.center,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -480,6 +494,138 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// STANDALONE SUB-SCREEN: Profile "My Saved" Collection (FULLY CLICKABLE)
+// ----------------------------------------------------------------------------
+class _StandaloneSavedNeedsScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('My Saved Needs'),
+        centerTitle: true,
+      ),
+      body: StreamBuilder(
+        stream: FirebaseDatabase.instance
+            .ref()
+            .child('users_saved_needs')
+            .child(user?.uid ?? '')
+            .onValue,
+        builder: (context, AsyncSnapshot<DatabaseEvent> savedSnapshot) {
+          if (savedSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!savedSnapshot.hasData ||
+              savedSnapshot.data!.snapshot.value == null) {
+            return const Center(
+              child: Text('No saved needs found.',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            );
+          }
+
+          final Map<dynamic, dynamic> savedMap =
+              savedSnapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+          final Set<String> savedIds =
+              savedMap.keys.map((e) => e.toString()).toSet();
+
+          return StreamBuilder(
+            stream: FirebaseDatabase.instance.ref().child('needs').onValue,
+            builder: (context, AsyncSnapshot<DatabaseEvent> needsSnapshot) {
+              if (needsSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              List<Need> bookmarkedNeeds = [];
+
+              if (needsSnapshot.hasData &&
+                  needsSnapshot.data!.snapshot.value != null) {
+                final Map<dynamic, dynamic> allMap =
+                    needsSnapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                allMap.forEach((key, value) {
+                  if (savedIds.contains(key)) {
+                    final data = Map<String, dynamic>.from(value as Map);
+                    bookmarkedNeeds.add(
+                      Need(
+                        id: key,
+                        title: data['title'] ?? '',
+                        description: data['description'] ?? '',
+                        category: data['category'] ?? '',
+                        budget: data['budget'] ?? 0,
+                        timeElapsed: 'Saved',
+                        urgency: data['urgency'] == 'high'
+                            ? Urgency.high
+                            : Urgency.medium,
+                        authorName: data['authorName'] ?? 'Anonymous',
+                        offers: data['offers'] ?? 0,
+                      ),
+                    );
+                  }
+                });
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(20),
+                itemCount: bookmarkedNeeds.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final need = bookmarkedNeeds[index];
+
+                  // FIXED: Added full interactive GestureDetector for smooth redirection
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => NeedDetailScreen(need: need),
+                        ),
+                      );
+                    },
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      color: AppColors.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: const BorderSide(color: AppColors.border),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        title: Text(need.title,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(need.description,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Rs. ${need.budget}',
+                                style: const TextStyle(
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_forward_ios_rounded,
+                                size: 14, color: AppColors.textTertiary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }

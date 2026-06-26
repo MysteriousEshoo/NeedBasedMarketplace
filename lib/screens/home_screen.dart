@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../widgets/pill_tag.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Screen 2 — Buyer/Provider home dashboard with a dynamic, filterable feed.
 class HomeScreen extends StatefulWidget {
@@ -748,109 +749,224 @@ class _HomeScreenState extends State<HomeScreen> {
 // ----------------------------------------------------------------------------
 
 class _NeedCard extends StatelessWidget {
-  const _NeedCard({super.key, required this.need, required this.onTap});
-
   final Need need;
   final VoidCallback onTap;
 
+  const _NeedCard({
+    super.key,
+    required this.need,
+    required this.onTap,
+  });
+
+  // Bookmark toggle karne ka professional Firebase function
+  void _toggleBookmark(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to save posts')),
+      );
+      return;
+    }
+
+    final userId = user.uid;
+    final DatabaseReference bookmarkRef = FirebaseDatabase.instance
+        .ref()
+        .child('users_saved_needs')
+        .child(userId)
+        .child(need.id);
+
+    try {
+      // Pehle check karenge ke kya yeh already saved hai
+      final snapshot = await bookmarkRef.get();
+      if (snapshot.exists) {
+        // Agar pehle se save hai to remove (Unsave) kar do
+        await bookmarkRef.remove();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Removed from saved needs')),
+        );
+      } else {
+        // Agar save nahi hai to database mein true set kar do
+        await bookmarkRef.set(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Added to saved needs')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating bookmark: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid ?? '';
 
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.border),
-            boxShadow: const [
-              BoxShadow(
-                color: AppColors.shadow,
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  PillTag(
-                    label: need.category,
-                    foreground: AppColors.accent,
-                    background: AppColors.accent.withValues(alpha: 0.08),
-                  ),
-                  const Spacer(),
-                  Text(
-                    need.timeElapsed,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                need.title,
-                style: textTheme.titleMedium?.copyWith(
-                  fontSize: 17,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                need.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  PillTag(
-                    label: need.formattedBudget,
-                    icon: Icons.account_balance_wallet_rounded,
-                    foreground: AppColors.budgetTag,
-                    background: AppColors.budgetTagSoft,
-                  ),
-                  const SizedBox(width: 8),
-                  PillTag(
-                    label: need.urgency.label,
-                    icon: Icons.local_fire_department_rounded,
-                    foreground: need.urgency.color,
-                    background: need.urgency.softColor,
-                  ),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      const Icon(Icons.bookmark_border_rounded,
-                          size: 18, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${need.offers}',
-                        style: textTheme.labelLarge?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Section: Tag & Urgency
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    need.category,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                _buildUrgencyBadge(context, need.urgency),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Title
+            Text(
+              need.title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            // Description
+            Text(
+              need.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            // Divider
+            Container(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            // Bottom Section: Budget & Action Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Budget',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Rs. ${need.budget}',
+                      style: const TextStyle(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                // LIVE BOOKMARK ICON WITH STREAM: Yeh real-time database se state check karega
+                Row(
+                  children: [
+                    if (user != null)
+                      StreamBuilder(
+                        stream: FirebaseDatabase.instance
+                            .ref()
+                            .child('users_saved_needs')
+                            .child(userId)
+                            .child(need.id)
+                            .onValue,
+                        builder:
+                            (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+                          final bool isSaved = snapshot.hasData &&
+                              snapshot.data!.snapshot.value != null;
+
+                          return IconButton(
+                            onPressed: () => _toggleBookmark(context),
+                            icon: Icon(
+                              isSaved
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_border_rounded,
+                              size: 22,
+                              color: isSaved
+                                  ? AppColors.accent
+                                  : AppColors.textSecondary,
+                            ),
+                          );
+                        },
+                      )
+                    else
+                      const Icon(Icons.bookmark_border_rounded,
+                          size: 22, color: AppColors.textSecondary),
+                    const SizedBox(width: 12),
+                    // Offers Counter
+                    Row(
+                      children: [
+                        const Icon(Icons.local_offer_outlined,
+                            size: 18, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${need.offers} offers',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUrgencyBadge(BuildContext context, Urgency urgency) {
+    Color color;
+    String label;
+    if (urgency == Urgency.high) {
+      color = const Color(0xFFEF4444);
+      label = 'Urgent';
+    } else if (urgency == Urgency.medium) {
+      color = const Color(0xFFF59E0B);
+      label = 'Medium';
+    } else {
+      color = const Color(0xFF10B981);
+      label = 'Low';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style:
+            TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
       ),
     );
   }

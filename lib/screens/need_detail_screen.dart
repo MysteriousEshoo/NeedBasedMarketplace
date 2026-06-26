@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../widgets/pill_tag.dart';
@@ -33,9 +34,60 @@ class NeedDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Need Details'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.bookmark_border_rounded),
-            onPressed: () {},
+          // LIVE REALTIME BOOKMARK SYSTEM WITH AUTO-TOGGLE & BACKGROUND FEEDBACK
+          StreamBuilder(
+            stream: FirebaseDatabase.instance
+                .ref()
+                .child('users_saved_needs')
+                .child(FirebaseAuth.instance.currentUser?.uid ?? '')
+                .child(need.id)
+                .onValue,
+            builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+              final bool isSaved =
+                  snapshot.hasData && snapshot.data!.snapshot.value != null;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                decoration: BoxDecoration(
+                  // Dynamic Background Darkening feedback
+                  color: isSaved
+                      ? AppColors.primary.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    color: isSaved ? AppColors.accent : AppColors.textSecondary,
+                  ),
+                  onPressed: () async {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null) return;
+
+                    final ref = FirebaseDatabase.instance
+                        .ref()
+                        .child('users_saved_needs')
+                        .child(user.uid)
+                        .child(need.id);
+
+                    if (isSaved) {
+                      await ref.remove();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Removed from saved needs')),
+                      );
+                    } else {
+                      await ref.set(true);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Added to saved needs')),
+                      );
+                    }
+                  },
+                ),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.share_outlined),

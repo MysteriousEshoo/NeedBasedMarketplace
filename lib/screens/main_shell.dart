@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
@@ -7,11 +9,6 @@ import 'need_detail_screen.dart';
 import 'post_need_screen.dart';
 import 'profile_screen.dart';
 
-/// The root authenticated shell.
-///
-/// Owns the single source of truth for the in-memory needs feed, the active
-/// bottom-navigation tab, and the "Post a Need" flow. Children receive the
-/// data and callbacks they need, keeping state lifted in one place.
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -20,52 +17,14 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  /// Mutable feed — seeded from mock data, mutated in memory at runtime.
-  /// FIXED: Changed from seedNeeds() to standard List.from(MockData.needs)
-  final List<Need> _needs = List<Need>.from(MockData.needs);
-
+  final List<Need> _needs = []; // Firebase dynamic feed handle karega
   int _tabIndex = 0;
-
-  /// Bumped whenever a need is posted so [HomeScreen] can reset its filter
-  /// and surface the freshly added item at the top of the feed.
   int _postSignal = 0;
 
-  // --------------------------------------------------------------------------
-  // Actions
-  // --------------------------------------------------------------------------
-
   Future<void> _openPostNeed() async {
-    final created = await Navigator.of(context).push<Need>(
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PostNeedScreen()),
     );
-    if (created == null || !mounted) return;
-
-    setState(() {
-      _needs.insert(0, created);
-      _tabIndex = 0;
-      _postSignal++;
-    });
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.primary,
-          duration: const Duration(seconds: 3),
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text('Your need is live at the top of the feed!'),
-              ),
-            ],
-          ),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-      );
   }
 
   void _openDetail(Need need) {
@@ -75,17 +34,12 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _onTabSelected(int index) {
-    // The center tab is reserved for the FAB action.
     if (index == 2) {
       _openPostNeed();
       return;
     }
     setState(() => _tabIndex = index);
   }
-
-  // --------------------------------------------------------------------------
-  // Build
-  // --------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -96,28 +50,28 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(
         index: _tabIndex,
         children: [
+          // Index 0: Home Feed
           HomeScreen(
             needs: _needs,
             postSignal: _postSignal,
             onOpenDetail: _openDetail,
           ),
-          const _PlaceholderTab(
-            icon: Icons.explore_rounded,
-            title: 'Explore',
-            message:
-                'Discover trending needs and top providers near you. This tab '
-                'is part of the next milestone.',
-          ),
-          // Index 2 is intercepted by the FAB; never shown.
+
+          // Index 1: LIVE SAVED NEEDS TAB (Relational Data Fetching Architecture)
+          _SavedNeedsTab(onOpenDetail: _openDetail),
+
+          // Index 2: FAB Spacer
           const SizedBox.shrink(),
+
+          // Index 3: Messages
           const _PlaceholderTab(
             icon: Icons.chat_bubble_rounded,
             title: 'Messages',
-            message:
-                'All your conversations with providers will live here, with '
-                'real-time updates and read receipts.',
+            message: 'All your conversations with providers will live here.',
           ),
-          const ProfileScreen(), // This is index 4
+
+          // Index 4: Profile
+          const ProfileScreen(),
         ],
       ),
       bottomNavigationBar: _BottomNav(
@@ -129,9 +83,163 @@ class _MainShellState extends State<MainShell> {
 }
 
 // ----------------------------------------------------------------------------
+// PROFESSIONAL SUB-WIDGET: Saved Needs Live View (Inline Optimized)
+// ----------------------------------------------------------------------------
+class _SavedNeedsTab extends StatelessWidget {
+  final void Function(Need need) onOpenDetail;
+  const _SavedNeedsTab({required this.onOpenDetail});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Center(child: Text('Please login to view saved needs'));
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Saved Needs'),
+        centerTitle: true,
+      ),
+      // Step 1: Listen to User's Saved IDs Tree
+      body: StreamBuilder(
+        stream: FirebaseDatabase.instance
+            .ref()
+            .child('users_saved_needs')
+            .child(user.uid)
+            .onValue,
+        builder: (context, AsyncSnapshot<DatabaseEvent> savedSnapshot) {
+          if (savedSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!savedSnapshot.hasData ||
+              savedSnapshot.data!.snapshot.value == null) {
+            return const _PlaceholderTab(
+              icon: Icons.bookmark_border_rounded,
+              title: 'No Saved Needs',
+              message:
+                  'Your bookmarked requirements will appear here once added.',
+            );
+          }
+
+          final Map<dynamic, dynamic> savedMap =
+              savedSnapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+          final Set<String> savedIds =
+              savedMap.keys.map((e) => e.toString()).toSet();
+
+          // Step 2: Fetch Master Needs Feed and Intersect
+          return StreamBuilder(
+            stream: FirebaseDatabase.instance.ref().child('needs').onValue,
+            builder: (context, AsyncSnapshot<DatabaseEvent> needsSnapshot) {
+              if (needsSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              List<Need> bookmarkedNeeds = [];
+
+              if (needsSnapshot.hasData &&
+                  needsSnapshot.data!.snapshot.value != null) {
+                final Map<dynamic, dynamic> allMap =
+                    needsSnapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+
+                allMap.forEach((key, value) {
+                  if (savedIds.contains(key)) {
+                    final data = Map<String, dynamic>.from(value as Map);
+                    bookmarkedNeeds.add(
+                      Need(
+                        id: key,
+                        title: data['title'] ?? '',
+                        description: data['description'] ?? '',
+                        category: data['category'] ?? '',
+                        budget: data['budget'] ?? 0,
+                        timeElapsed: 'Saved',
+                        urgency: data['urgency'] == 'high'
+                            ? Urgency.high
+                            : (data['urgency'] == 'low'
+                                ? Urgency.low
+                                : Urgency.medium),
+                        authorName: data['authorName'] ?? 'Anonymous',
+                        offers: data['offers'] ?? 0,
+                      ),
+                    );
+                  }
+                });
+              }
+
+              if (bookmarkedNeeds.isEmpty) {
+                return const _PlaceholderTab(
+                  icon: Icons.bookmark_border_rounded,
+                  title: 'No Saved Needs',
+                  message:
+                      'Your bookmarked requirements will appear here once added.',
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(20),
+                itemCount: bookmarkedNeeds.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final need = bookmarkedNeeds[index];
+                  // Using HomeScreen's Need Card view
+                  return HomeScreenCardViewPlaceholder(
+                      need: need, onOpenDetail: onOpenDetail);
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Temporary internal adapter to use the dynamic card
+// Temporary internal adapter to use the dynamic card
+class HomeScreenCardViewPlaceholder extends StatelessWidget {
+  final Need need;
+  final void Function(Need need) onOpenDetail;
+  const HomeScreenCardViewPlaceholder(
+      {super.key, required this.need, required this.onOpenDetail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        // FIXED: Yeh onTap missing tha jiski wajah se click kaam nahi kar raha tha!
+        onTap: () => onOpenDetail(need),
+        title: Text(
+          need.title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(need.description,
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+        ),
+        trailing: Text(
+          'Rs. ${need.budget}',
+          style: const TextStyle(
+              color: AppColors.accent,
+              fontWeight: FontWeight.bold,
+              fontSize: 15),
+        ),
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Bottom navigation
 // ----------------------------------------------------------------------------
-
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
 
@@ -161,9 +269,10 @@ class _BottomNav extends StatelessWidget {
                 selected: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
+              // FIXED: Replaced Explore placeholder with Saved tab link
               _NavItem(
-                icon: Icons.explore_rounded,
-                label: 'Explore',
+                icon: Icons.bookmark_rounded,
+                label: 'Saved',
                 selected: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
@@ -171,13 +280,13 @@ class _BottomNav extends StatelessWidget {
               _NavItem(
                 icon: Icons.chat_bubble_rounded,
                 label: 'Messages',
-                selected: currentIndex == 3, // FIXED: Matches the list index 3
+                selected: currentIndex == 3,
                 onTap: () => onTap(3),
               ),
               _NavItem(
                 icon: Icons.person_rounded,
                 label: 'Profile',
-                selected: currentIndex == 4, // FIXED: Matches the list index 4
+                selected: currentIndex == 4,
                 onTap: () => onTap(4),
               ),
             ],
@@ -232,10 +341,6 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Placeholder tabs
-// ----------------------------------------------------------------------------
-
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({
     required this.icon,
@@ -273,10 +378,8 @@ class _PlaceholderTab extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
+                style: textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary, height: 1.5),
               ),
             ],
           ),
@@ -286,13 +389,8 @@ class _PlaceholderTab extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Glowing FAB
-// ----------------------------------------------------------------------------
-
 class _GlowingFab extends StatefulWidget {
   const _GlowingFab({required this.onPressed});
-
   final VoidCallback onPressed;
 
   @override
