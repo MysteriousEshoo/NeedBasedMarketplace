@@ -17,7 +17,6 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  final List<Need> _needs = []; // Firebase dynamic feed handle karega
   int _tabIndex = 0;
   int _postSignal = 0;
 
@@ -47,32 +46,77 @@ class _MainShellState extends State<MainShell> {
       extendBody: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: _GlowingFab(onPressed: _openPostNeed),
-      body: IndexedStack(
-        index: _tabIndex,
-        children: [
-          // Index 0: Home Feed
-          HomeScreen(
-            needs: _needs,
-            postSignal: _postSignal,
-            onOpenDetail: _openDetail,
-          ),
+      // FIXED: Added top-level StreamBuilder to feed live Firebase data directly into HomeScreen
+      body: StreamBuilder(
+        stream: FirebaseDatabase.instance.ref().child('needs').onValue,
+        builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+          List<Need> liveNeeds = [];
 
-          // Index 1: LIVE SAVED NEEDS TAB (Relational Data Fetching Architecture)
-          _SavedNeedsTab(onOpenDetail: _openDetail),
+          if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+            final Map<dynamic, dynamic> allMap =
+                snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
 
-          // Index 2: FAB Spacer
-          const SizedBox.shrink(),
+            allMap.forEach((key, value) {
+              final data = Map<String, dynamic>.from(value as Map);
 
-          // Index 3: Messages
-          const _PlaceholderTab(
-            icon: Icons.chat_bubble_rounded,
-            title: 'Messages',
-            message: 'All your conversations with providers will live here.',
-          ),
+              // Dynamic urgency mapping helper
+              Urgency dynamicUrgency = Urgency.medium;
+              if (data['urgency'] == 'high') {
+                dynamicUrgency = Urgency.high;
+              } else if (data['urgency'] == 'low') {
+                dynamicUrgency = Urgency.low;
+              }
 
-          // Index 4: Profile
-          const ProfileScreen(),
-        ],
+              liveNeeds.add(
+                Need(
+                  id: key,
+                  title: data['title'] ?? 'Untitled',
+                  description: data['description'] ?? '',
+                  category: data['category'] ?? 'General',
+                  budget: data['budget'] ?? 0,
+                  timeElapsed: 'Just now',
+                  urgency: dynamicUrgency,
+                  authorName: data['authorName'] ?? 'Anonymous',
+                  offers: data['offers'] ?? 0,
+                ),
+              );
+            });
+
+            // Show fresh posts at the top of the feed
+            liveNeeds = liveNeeds.reversed.toList();
+          }
+
+          return IndexedStack(
+            index: _tabIndex,
+            children: [
+              // Index 0: Home Feed with LIVE DATA PIPELINE PIPED IN
+              snapshot.connectionState == ConnectionState.waiting
+                  ? const Center(child: CircularProgressIndicator())
+                  : HomeScreen(
+                      needs: liveNeeds,
+                      postSignal: _postSignal,
+                      onOpenDetail: _openDetail,
+                    ),
+
+              // Index 1: LIVE SAVED NEEDS TAB
+              _SavedNeedsTab(onOpenDetail: _openDetail),
+
+              // Index 2: FAB Spacer
+              const SizedBox.shrink(),
+
+              // Index 3: Messages
+              const _PlaceholderTab(
+                icon: Icons.chat_bubble_rounded,
+                title: 'Messages',
+                message:
+                    'All your conversations with providers will live here.',
+              ),
+
+              // Index 4: Profile
+              const ProfileScreen(),
+            ],
+          );
+        },
       ),
       bottomNavigationBar: _BottomNav(
         currentIndex: _tabIndex,
@@ -101,7 +145,6 @@ class _SavedNeedsTab extends StatelessWidget {
         title: const Text('Saved Needs'),
         centerTitle: true,
       ),
-      // Step 1: Listen to User's Saved IDs Tree
       body: StreamBuilder(
         stream: FirebaseDatabase.instance
             .ref()
@@ -128,7 +171,6 @@ class _SavedNeedsTab extends StatelessWidget {
           final Set<String> savedIds =
               savedMap.keys.map((e) => e.toString()).toSet();
 
-          // Step 2: Fetch Master Needs Feed and Intersect
           return StreamBuilder(
             stream: FirebaseDatabase.instance.ref().child('needs').onValue,
             builder: (context, AsyncSnapshot<DatabaseEvent> needsSnapshot) {
@@ -146,6 +188,14 @@ class _SavedNeedsTab extends StatelessWidget {
                 allMap.forEach((key, value) {
                   if (savedIds.contains(key)) {
                     final data = Map<String, dynamic>.from(value as Map);
+
+                    Urgency dynamicUrgency = Urgency.medium;
+                    if (data['urgency'] == 'high') {
+                      dynamicUrgency = Urgency.high;
+                    } else if (data['urgency'] == 'low') {
+                      dynamicUrgency = Urgency.low;
+                    }
+
                     bookmarkedNeeds.add(
                       Need(
                         id: key,
@@ -154,11 +204,7 @@ class _SavedNeedsTab extends StatelessWidget {
                         category: data['category'] ?? '',
                         budget: data['budget'] ?? 0,
                         timeElapsed: 'Saved',
-                        urgency: data['urgency'] == 'high'
-                            ? Urgency.high
-                            : (data['urgency'] == 'low'
-                                ? Urgency.low
-                                : Urgency.medium),
+                        urgency: dynamicUrgency,
                         authorName: data['authorName'] ?? 'Anonymous',
                         offers: data['offers'] ?? 0,
                       ),
@@ -182,7 +228,6 @@ class _SavedNeedsTab extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 16),
                 itemBuilder: (context, index) {
                   final need = bookmarkedNeeds[index];
-                  // Using HomeScreen's Need Card view
                   return HomeScreenCardViewPlaceholder(
                       need: need, onOpenDetail: onOpenDetail);
                 },
@@ -195,8 +240,6 @@ class _SavedNeedsTab extends StatelessWidget {
   }
 }
 
-// Temporary internal adapter to use the dynamic card
-// Temporary internal adapter to use the dynamic card
 class HomeScreenCardViewPlaceholder extends StatelessWidget {
   final Need need;
   final void Function(Need need) onOpenDetail;
@@ -214,7 +257,6 @@ class HomeScreenCardViewPlaceholder extends StatelessWidget {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
-        // FIXED: Yeh onTap missing tha jiski wajah se click kaam nahi kar raha tha!
         onTap: () => onOpenDetail(need),
         title: Text(
           need.title,
@@ -269,7 +311,6 @@ class _BottomNav extends StatelessWidget {
                 selected: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
-              // FIXED: Replaced Explore placeholder with Saved tab link
               _NavItem(
                 icon: Icons.bookmark_rounded,
                 label: 'Saved',

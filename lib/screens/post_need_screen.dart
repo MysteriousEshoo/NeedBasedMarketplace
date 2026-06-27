@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
@@ -61,9 +62,8 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
     }
   }
 
-  /// Assembles the user's input into a [Need] and returns it to the shell,
-  /// which prepends it to the in-memory feed.
-  Need _buildNeed() {
+  /// Assembles the user's input into a [Need] structure.
+  Need _buildNeed(String authorName, String authorId) {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
     final budget = int.tryParse(
@@ -80,7 +80,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
       budget: budget,
       timeElapsed: 'Just now',
       urgency: _selectedUrgency,
-      authorName: 'Ayesha K.',
+      authorName: authorName,
       offers: 0,
     );
   }
@@ -89,14 +89,30 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
     setState(() => _isPublishing = true);
 
     try {
-      // 1. Inputs se data collect karein
+      // 1. Current logged-in user ki details nikaalein
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final String authorId = currentUser?.uid ?? 'unknown_user';
+
+      // Defensively user ka naam nikaalna:
+      // Pehle user ka display name check hoga, agar khaali hua toh email ka shuruati hissa utha lengey
+      String currentUserName = 'Anonymous User';
+      if (currentUser != null) {
+        if (currentUser.displayName != null &&
+            currentUser.displayName!.isNotEmpty) {
+          currentUserName = currentUser.displayName!;
+        } else if (currentUser.email != null) {
+          currentUserName = currentUser.email!.split('@').first;
+        }
+      }
+
+      // 2. Inputs se data collect karein
       final title = _titleController.text.trim();
       final description = _descriptionController.text.trim();
       final budget = int.tryParse(
               _budgetController.text.replaceAll(RegExp(r'[^0-9]'), '')) ??
           0;
 
-      // 2. Map tayaar karein jo database mein save hoga
+      // 3. Map tayaar karein jo database mein save hoga (FULLY DYNAMIC AUTHOR LINKED)
       final Map<String, dynamic> needData = {
         'title': title.isEmpty ? 'Untitled need' : title,
         'description':
@@ -104,13 +120,14 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
         'category': _selectedCategory ?? 'General',
         'budget': budget,
         'urgency':
-            _selectedUrgency.toString().split('.').last, // low, medium, ya high
-        'authorName': 'Ayesha K.', // Baad mein ise logged-in user se badlein ge
-        'timestamp': ServerValue.timestamp, // Firebase ka server time
+            _selectedUrgency.toString().split('.').last, // low, medium, high
+        'authorId': authorId, // TRACKING ID ADDED
+        'authorName': currentUserName, // DYNAMIC LIVE USER NAME
+        'timestamp': ServerValue.timestamp, // Firebase server side time
         'offers': 0,
       };
 
-      // 3. Realtime Database mein 'needs' naam ka folder bana kar push karein
+      // 4. Realtime Database mein 'needs' naam ka folder bana kar push karein
       final DatabaseReference dbRef =
           FirebaseDatabase.instance.ref().child('needs');
       await dbRef.push().set(needData);
@@ -118,24 +135,25 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
       if (!mounted) return;
       setState(() => _isPublishing = false);
 
-      // 4. Data save hone ke baad screen band karein
+      // 5. Data save hone ke baad screen band karein
       Navigator.of(context).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('⚡ Need Published Successfully!'),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isPublishing = false);
 
-      // Agar internet ya kisi wajah se fail ho jaye
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error publishing: $e'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -212,7 +230,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
       title: 'What do you need?',
       subtitle: 'Give your need a clear title and pick a category.',
       children: [
-        _FieldLabel('Need title'),
+        const _FieldLabel('Need title'),
         TextField(
           controller: _titleController,
           textCapitalization: TextCapitalization.sentences,
@@ -221,7 +239,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
           ),
         ),
         const SizedBox(height: 22),
-        _FieldLabel('Category'),
+        const _FieldLabel('Category'),
         DropdownButtonFormField<String>(
           initialValue: _selectedCategory,
           isExpanded: true,
@@ -246,7 +264,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
       title: 'Add the details',
       subtitle: 'Describe what you need and set an estimated budget.',
       children: [
-        _FieldLabel('Description'),
+        const _FieldLabel('Description'),
         Container(
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -276,7 +294,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
           ),
         ),
         const SizedBox(height: 22),
-        _FieldLabel('Estimated budget'),
+        const _FieldLabel('Estimated budget'),
         TextField(
           controller: _budgetController,
           keyboardType: TextInputType.number,
@@ -397,7 +415,6 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
 // Private helpers
 // ----------------------------------------------------------------------------
 
-/// Common scaffold for each step: a step badge, title, subtitle and content.
 class _StepScaffold extends StatelessWidget {
   const _StepScaffold({
     required this.step,
@@ -445,7 +462,6 @@ class _StepScaffold extends StatelessWidget {
   }
 }
 
-/// Small bold caption shown above an input control.
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.text);
   final String text;
@@ -466,7 +482,6 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-/// A selectable urgency card replacing a basic radio button.
 class _UrgencyCard extends StatelessWidget {
   const _UrgencyCard({
     required this.urgency,

@@ -4,9 +4,9 @@ import 'package:firebase_database/firebase_database.dart';
 
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
-import 'need_detail_screen.dart'; // REQUIRED: For redirection click
+import 'need_detail_screen.dart';
 
-/// Premium, scrollable profile screen with gradient header, stats, and menu.
+/// Premium, scrollable profile screen with dynamic Firebase user data.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -15,6 +15,35 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // Realtime user data state variables
+  String _currentUserName = 'Loading...';
+  String _currentUserEmail = 'Loading...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  /// Fetches the dynamic user data from Firebase Auth as a live fallback
+  void _loadUserData() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      setState(() {
+        // Agar display name ho toh woh, nahi toh email ka pehla part
+        if (user.displayName != null && user.displayName!.isNotEmpty) {
+          _currentUserName = user.displayName!;
+        } else if (user.email != null) {
+          _currentUserName = user.email!.split('@').first;
+        } else {
+          _currentUserName = 'Anonymous User';
+        }
+
+        _currentUserEmail = user.email ?? 'No Email';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -37,7 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Gradient header with avatar and edit overlay.
+  /// Gradient header with DYNAMIC avatar metadata and text overlay.
   Widget _buildGradientHeader() {
     return Container(
       decoration: BoxDecoration(
@@ -126,9 +155,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          // Name
+          // FIXED: Now displays dynamic name instead of hardcoded 'Ayesha Khan'
           Text(
-            'Ayesha Khan',
+            _currentUserName,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
@@ -136,9 +165,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
           ),
           const SizedBox(height: 6),
-          // Email
+          // FIXED: Now displays dynamic logged-in user email
           Text(
-            'ayesha.khan@email.com',
+            _currentUserEmail,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w500,
@@ -579,7 +608,6 @@ class _StandaloneSavedNeedsScreen extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final need = bookmarkedNeeds[index];
 
-                  // FIXED: Added full interactive GestureDetector for smooth redirection
                   return GestureDetector(
                     onTap: () {
                       Navigator.push(
