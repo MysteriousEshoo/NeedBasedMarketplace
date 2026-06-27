@@ -23,39 +23,60 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategory = 'All';
+  String _searchQuery = ''; // Live search filter holder
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filteredNeeds = _selectedCategory == 'All'
-        ? widget.needs
-        : widget.needs.where((n) => n.category == _selectedCategory).toList();
+    // 🧠 Dynamic Multi-Filter Pipeline (Category + Search Query Text matching)
+    final filteredNeeds = widget.needs.where((need) {
+      final matchesCategory =
+          _selectedCategory == 'All' || need.category == _selectedCategory;
+      final matchesSearch = need.title
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
+          need.description.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          need.category.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCyberpunkHeader(),
-            const SizedBox(height: 20),
-            _buildFuturisticSliderChips(),
-            const SizedBox(height: 16),
-            Expanded(
-              child: filteredNeeds.isEmpty
-                  ? _buildCyberpunkEmptyState()
-                  : ListView.separated(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
-                      itemCount: filteredNeeds.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 24),
-                      itemBuilder: (context, index) {
-                        final need = filteredNeeds[index];
-                        return _build3DMarketplaceItem(need);
-                      },
-                    ),
-            ),
-          ],
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context)
+              .unfocus(), // Tap outside to close keyboard safely
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCyberpunkHeader(),
+              _build3DSearchBar(), // 🛸 NEW: Interactive 3D Search Hub injected here
+              const SizedBox(height: 12),
+              _buildFuturisticSliderChips(),
+              const SizedBox(height: 16),
+              Expanded(
+                child: filteredNeeds.isEmpty
+                    ? _buildCyberpunkEmptyState()
+                    : ListView.separated(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
+                        itemCount: filteredNeeds.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 24),
+                        itemBuilder: (context, index) {
+                          final need = filteredNeeds[index];
+                          return _build3DMarketplaceItem(need);
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -73,52 +94,34 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.surface, Color(0xFF141C30)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.15),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'SYSTEM USER ACTIVE',
-                  style: TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  currentUserName,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 26,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'SYSTEM USER ACTIVE',
+                style: TextStyle(
+                    color: AppColors.accent,
+                    fontSize: 10,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
+                    letterSpacing: 1.5),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                currentUserName,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          const Spacer(),
           Container(
             height: 48,
             width: 48,
@@ -134,6 +137,64 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 🥽 Futuristic Glassmorphic 3D Search Field Widget with Isometric Shadow Depth
+  Widget _build3DSearchBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border:
+            Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 12,
+            offset: Offset(-4, 6),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600),
+        cursorColor: AppColors.primaryLight,
+        decoration: InputDecoration(
+          hintText: 'Search needs by keyword, type, title...',
+          hintStyle: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500),
+          prefixIcon: const Icon(Icons.search_rounded,
+              color: AppColors.primaryLight, size: 22),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textSecondary, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _searchController.clear();
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : const Icon(Icons.tune_rounded,
+                  color: AppColors.textTertiary, size: 18),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
       ),
     );
   }
@@ -254,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              const Spacer(), // <-- Is par se bhi const bilkul clear hai
+              const Spacer(),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -262,9 +323,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: need.urgency.color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: need.urgency.color.withValues(alpha: 0.3),
-                    width: 1.5,
-                  ),
+                      color: need.urgency.color.withValues(alpha: 0.3),
+                      width: 1.5),
                 ),
                 child: Row(
                   children: [
@@ -274,17 +334,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       need.urgency.label.toUpperCase(),
                       style: TextStyle(
-                        color: need.urgency.color,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 11,
-                        letterSpacing: 0.5,
-                      ),
+                          color: need.urgency.color,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          letterSpacing: 0.5),
                     ),
                   ],
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -307,12 +366,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'GRID VACANT',
+            'NO MATCHES FOUND',
             style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Try refining your active search string.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
         ],
       ),
