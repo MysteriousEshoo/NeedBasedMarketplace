@@ -20,6 +20,44 @@ class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
   int _postSignal = 0;
 
+  /// 🕒 PROFESSIONAL HELPER: Converts Firebase Timestamp to Dynamic "Time Ago" or Date
+  String _convertToTimeAgo(dynamic timestamp) {
+    if (timestamp == null) return 'Just now';
+
+    try {
+      int millis = 0;
+      if (timestamp is int) {
+        millis = timestamp;
+      } else if (timestamp is Map && timestamp['.sv'] != null) {
+        return 'Just now'; // Handling local optimistic updates
+      } else {
+        return 'Just now';
+      }
+
+      final postDate = DateTime.fromMillisecondsSinceEpoch(millis);
+      final currentDate = DateTime.now();
+      final difference = currentDate.difference(postDate);
+
+      if (difference.inSeconds < 60) {
+        return 'Just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes} mins ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours} hours ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays} days ago';
+      } else if (difference.inDays < 30) {
+        int weeks = (difference.inDays / 7).floor();
+        return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
+      } else {
+        // Week se zyada ya month guzarne par standard date format render hoga
+        return '${postDate.day}/${postDate.month}/${postDate.year}';
+      }
+    } catch (e) {
+      return 'Just now';
+    }
+  }
+
   Future<void> _openPostNeed() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PostNeedScreen()),
@@ -46,7 +84,6 @@ class _MainShellState extends State<MainShell> {
       extendBody: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: _GlowingFab(onPressed: _openPostNeed),
-      // FIXED: Added top-level StreamBuilder to feed live Firebase data directly into HomeScreen
       body: StreamBuilder(
         stream: FirebaseDatabase.instance.ref().child('needs').onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
@@ -59,13 +96,15 @@ class _MainShellState extends State<MainShell> {
             allMap.forEach((key, value) {
               final data = Map<String, dynamic>.from(value as Map);
 
-              // Dynamic urgency mapping helper
               Urgency dynamicUrgency = Urgency.medium;
               if (data['urgency'] == 'high') {
                 dynamicUrgency = Urgency.high;
               } else if (data['urgency'] == 'low') {
                 dynamicUrgency = Urgency.low;
               }
+
+              // FIXED: timeElapsed mein ab static text nahi, balkay dynamic timestamp pass ho raha hai!
+              final dynamicTimeText = _convertToTimeAgo(data['timestamp']);
 
               liveNeeds.add(
                 Need(
@@ -74,7 +113,7 @@ class _MainShellState extends State<MainShell> {
                   description: data['description'] ?? '',
                   category: data['category'] ?? 'General',
                   budget: data['budget'] ?? 0,
-                  timeElapsed: 'Just now',
+                  timeElapsed: dynamicTimeText,
                   urgency: dynamicUrgency,
                   authorName: data['authorName'] ?? 'Anonymous',
                   offers: data['offers'] ?? 0,
@@ -82,14 +121,12 @@ class _MainShellState extends State<MainShell> {
               );
             });
 
-            // Show fresh posts at the top of the feed
             liveNeeds = liveNeeds.reversed.toList();
           }
 
           return IndexedStack(
             index: _tabIndex,
             children: [
-              // Index 0: Home Feed with LIVE DATA PIPELINE PIPED IN
               snapshot.connectionState == ConnectionState.waiting
                   ? const Center(child: CircularProgressIndicator())
                   : HomeScreen(
@@ -97,22 +134,14 @@ class _MainShellState extends State<MainShell> {
                       postSignal: _postSignal,
                       onOpenDetail: _openDetail,
                     ),
-
-              // Index 1: LIVE SAVED NEEDS TAB
               _SavedNeedsTab(onOpenDetail: _openDetail),
-
-              // Index 2: FAB Spacer
               const SizedBox.shrink(),
-
-              // Index 3: Messages
               const _PlaceholderTab(
                 icon: Icons.chat_bubble_rounded,
                 title: 'Messages',
                 message:
                     'All your conversations with providers will live here.',
               ),
-
-              // Index 4: Profile
               const ProfileScreen(),
             ],
           );
@@ -132,6 +161,25 @@ class _MainShellState extends State<MainShell> {
 class _SavedNeedsTab extends StatelessWidget {
   final void Function(Need need) onOpenDetail;
   const _SavedNeedsTab({required this.onOpenDetail});
+
+  String _convertToTimeAgo(dynamic timestamp) {
+    if (timestamp == null) return 'Just now';
+    try {
+      if (timestamp is! int) return 'Just now';
+      final postDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      final difference = DateTime.now().difference(postDate);
+
+      if (difference.inSeconds < 60) return 'Just now';
+      if (difference.inMinutes < 60) return '${difference.inMinutes} mins ago';
+      if (difference.inHours < 24) return '${difference.inHours} hours ago';
+      if (difference.inDays < 7) return '${difference.inDays} days ago';
+      if (difference.inDays < 30)
+        return '${(difference.inDays / 7).floor()} weeks ago';
+      return '${postDate.day}/${postDate.month}/${postDate.year}';
+    } catch (_) {
+      return 'Just now';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +251,7 @@ class _SavedNeedsTab extends StatelessWidget {
                         description: data['description'] ?? '',
                         category: data['category'] ?? '',
                         budget: data['budget'] ?? 0,
-                        timeElapsed: 'Saved',
+                        timeElapsed: _convertToTimeAgo(data['timestamp']),
                         urgency: dynamicUrgency,
                         authorName: data['authorName'] ?? 'Anonymous',
                         offers: data['offers'] ?? 0,
@@ -279,9 +327,6 @@ class HomeScreenCardViewPlaceholder extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Bottom navigation
-// ----------------------------------------------------------------------------
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
 
@@ -317,7 +362,7 @@ class _BottomNav extends StatelessWidget {
                 selected: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
-              const SizedBox(width: 64), // FAB gap
+              const SizedBox(width: 64),
               _NavItem(
                 icon: Icons.chat_bubble_rounded,
                 label: 'Messages',
