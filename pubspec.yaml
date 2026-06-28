@@ -18,6 +18,7 @@ dependencies:
   firebase_auth: ^5.1.0
   # Cloud Firestore (Data save karne ke liye)
   cloud_firestore: ^5.2.0
+  image_picker: ^1.2.2
 
 dev_dependencies:
   flutter_lints: ^4.0.0
