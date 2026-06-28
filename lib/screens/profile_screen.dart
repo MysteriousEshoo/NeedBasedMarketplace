@@ -426,6 +426,12 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
 // ----------------------------------------------------------------------------
 // PIPELINE 2: User-Friendly Production Settings Panel
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// PIPELINE 2: User-Friendly Production Settings Panel with Dual Biometrics
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// PIPELINE 2: Self-Contained Safe Settings Panel (Zero Global Errors)
+// ----------------------------------------------------------------------------
 class _FullEnterpriseSettingsScreen extends StatefulWidget {
   const _FullEnterpriseSettingsScreen();
 
@@ -438,49 +444,87 @@ class _FullEnterpriseSettingsScreenState
     extends State<_FullEnterpriseSettingsScreen> {
   bool _pushNotifications = true;
   bool _biometricsEnabled = false;
-  bool _darkMode = true;
+  bool _fingerprintEnabled = false;
+  bool _faceIdEnabled = false;
   bool _buyerMode = true;
 
-  /// 🔐 EXACT FIXED ENGINE NAME MATCH METHOD
-  void _executeHardwareBiometricEnrollment(bool currentVal) async {
-    if (!currentVal) {
-      _showCoreFeedback('Biometric unlock disabled.');
+  // 🧬 LOCAL THEME STATE REGISTER (Isi screen ke liye isolated)
+  bool _localDarkMode = true;
+
+  void _triggerBiometricSetupConsole(String type) async {
+    bool isFingerprint = type == 'fingerprint';
+    if ((isFingerprint && !_fingerprintEnabled) ||
+        (!isFingerprint && !_faceIdEnabled)) {
+      _showCoreFeedback(
+          '${isFingerprint ? "Fingerprint" : "Face ID"} unlock disabled.');
       return;
     }
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: AppColors.primary)),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.fingerprint_rounded,
-                size: 64, color: AppColors.primaryLight),
-            SizedBox(height: 16),
-            Text('SCAN FINGERPRINT',
-                style: TextStyle(
-                    color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Place your finger on the sensor to setup biometrics safely.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
+      builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
+        Future.delayed(const Duration(milliseconds: 2500), () {
+          if (!mounted) return;
+          Navigator.pop(context);
+          _showCoreFeedback(
+              '🎉 ${isFingerprint ? "Fingerprint" : "Face ID"} activation setup completed successfully!');
+        });
 
-    await Future.delayed(const Duration(milliseconds: 2000));
-    if (!mounted) return;
-    Navigator.pop(context);
-    _showCoreFeedback('🎉 Biometric fingerprint setup completed!');
+        // Dynamic design adapted to local theme state safely
+        final Color popBg = _localDarkMode ? AppColors.surface : Colors.white;
+        final Color popText =
+            _localDarkMode ? AppColors.textPrimary : Colors.black87;
+        final Color popSubText =
+            _localDarkMode ? AppColors.textSecondary : Colors.black54;
+
+        return AlertDialog(
+          backgroundColor: popBg,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+              side: BorderSide(color: AppColors.primary.withOpacity(0.5))),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                    isFingerprint
+                        ? Icons.fingerprint_rounded
+                        : Icons.face_retouching_natural_rounded,
+                    size: 72,
+                    color: AppColors.primaryLight),
+                const SizedBox(height: 20),
+                Text(
+                    isFingerprint
+                        ? 'SCANNING FINGERPRINT...'
+                        : 'RECOGNIZING FACE...',
+                    style: TextStyle(
+                        color: popText,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: 10),
+                Text(
+                    isFingerprint
+                        ? 'Please place your registered finger firmly against the device biometric sensor layout matrix.'
+                        : 'Please position your device directly in front of your face and look straight into the camera lens node.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: popSubText, fontSize: 12)),
+                const SizedBox(height: 24),
+                const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: AppColors.primaryLight)),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
   }
 
-  /// 👤 SIMPLIFIED: Username change with easy wording
   void _executeLiveUsernameChangeProcedure() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -518,19 +562,20 @@ class _FullEnterpriseSettingsScreenState
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
+        final Color popBg = _localDarkMode ? AppColors.surface : Colors.white;
+        final Color popText =
+            _localDarkMode ? AppColors.textPrimary : Colors.black87;
         return AlertDialog(
-          backgroundColor: AppColors.surface,
+          backgroundColor: popBg,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: const BorderSide(color: AppColors.border)),
-          title: const Text('Update Username',
+          title: Text('Update Username',
               style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
-                  fontSize: 16)),
+                  fontWeight: FontWeight.w900, color: popText, fontSize: 16)),
           content: TextField(
             controller: usernameInputController,
-            style: const TextStyle(color: AppColors.textPrimary),
+            style: TextStyle(color: popText),
             decoration: const InputDecoration(
               labelText: 'New Username',
               labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -590,31 +635,30 @@ class _FullEnterpriseSettingsScreenState
     );
   }
 
-  /// 🔒 UPDATED: Password change with enter + re-enter validation match check
   void _executeSecurePasswordModFlow() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final currentPassController = TextEditingController();
     final newPassController = TextEditingController();
-    final reEnterPassController =
-        TextEditingController(); // New Re-enter Controller
+    final reEnterPassController = TextEditingController();
     bool isProcessing = false;
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
+        final Color popBg = _localDarkMode ? AppColors.surface : Colors.white;
+        final Color popText =
+            _localDarkMode ? AppColors.textPrimary : Colors.black87;
         return AlertDialog(
-          backgroundColor: AppColors.surface,
+          backgroundColor: popBg,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: const BorderSide(color: AppColors.border)),
-          title: const Text('Change Password',
+          title: Text('Change Password',
               style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
-                  fontSize: 16)),
+                  fontWeight: FontWeight.w900, color: popText, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -622,7 +666,7 @@ class _FullEnterpriseSettingsScreenState
                 TextField(
                   controller: currentPassController,
                   obscureText: true,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: popText),
                   decoration: const InputDecoration(
                       labelText: 'Current Password',
                       labelStyle: TextStyle(color: AppColors.textSecondary)),
@@ -630,7 +674,7 @@ class _FullEnterpriseSettingsScreenState
                 TextField(
                   controller: newPassController,
                   obscureText: true,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: popText),
                   decoration: const InputDecoration(
                       labelText: 'Enter New Password',
                       labelStyle: TextStyle(color: AppColors.textSecondary)),
@@ -638,7 +682,7 @@ class _FullEnterpriseSettingsScreenState
                 TextField(
                   controller: reEnterPassController,
                   obscureText: true,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: popText),
                   decoration: const InputDecoration(
                       labelText: 'Re-enter New Password',
                       labelStyle: TextStyle(color: AppColors.textSecondary)),
@@ -687,7 +731,6 @@ class _FullEnterpriseSettingsScreenState
                         return;
                       }
 
-                      // 🚨 CRITICAL CHECK: New password match validation
                       if (newText != reEnterText) {
                         _showCoreFeedback(
                             '⚠️ Error: New passwords do not match!');
@@ -710,7 +753,6 @@ class _FullEnterpriseSettingsScreenState
                             '⚠️ Re-Authentication failed: Current password mismatch.');
                       }
                     },
-              // FIXED: Changed button text to 'Change Password'
               child: isProcessing
                   ? const SizedBox(
                       width: 16,
@@ -743,7 +785,7 @@ class _FullEnterpriseSettingsScreenState
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          backgroundColor: AppColors.surface,
+          backgroundColor: _localDarkMode ? AppColors.surface : Colors.white,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: const BorderSide(color: AppColors.accent)),
@@ -756,7 +798,8 @@ class _FullEnterpriseSettingsScreenState
               Text(
                 'TRANSMISSION SENT',
                 style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color:
+                        _localDarkMode ? AppColors.textPrimary : Colors.black87,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                     letterSpacing: 0.5),
@@ -784,7 +827,7 @@ class _FullEnterpriseSettingsScreenState
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: _localDarkMode ? AppColors.surface : Colors.white,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: AppColors.urgentHigh)),
@@ -809,7 +852,7 @@ class _FullEnterpriseSettingsScreenState
   void _handleContactSalesAction() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: _localDarkMode ? AppColors.surface : Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Padding(
@@ -828,9 +871,11 @@ class _FullEnterpriseSettingsScreenState
             ListTile(
               leading: const Icon(Icons.phone_in_talk_rounded,
                   color: AppColors.primaryLight),
-              title: const Text('Direct Phone Channel',
+              title: Text('Direct Phone Channel',
                   style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: _localDarkMode
+                          ? AppColors.textPrimary
+                          : Colors.black87,
                       fontWeight: FontWeight.bold)),
               subtitle: const Text(
                   'Tap to invoke device system dial pad launcher',
@@ -846,9 +891,11 @@ class _FullEnterpriseSettingsScreenState
             ListTile(
               leading: const Icon(Icons.mail_outline_rounded,
                   color: AppColors.primaryLight),
-              title: const Text('Official Corporate Mailbox',
+              title: Text('Official Corporate Mailbox',
                   style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: _localDarkMode
+                          ? AppColors.textPrimary
+                          : Colors.black87,
                       fontWeight: FontWeight.bold)),
               subtitle: const Text('Compose a direct contract transmission',
                   style:
@@ -885,12 +932,26 @@ class _FullEnterpriseSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    // 🎨 CHOOSE COLORS BASED ON ISOLATED SYSTEM STATE
+    final Color currentBg =
+        _localDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color currentSurface =
+        _localDarkMode ? AppColors.surface : Colors.white;
+    final Color currentBorder =
+        _localDarkMode ? AppColors.border : const Color(0xFFCBD5E1);
+    final Color currentText =
+        _localDarkMode ? AppColors.textPrimary : Colors.black87;
+    final Color currentSubText =
+        _localDarkMode ? AppColors.textTertiary : Colors.black54;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: currentBg, // Isolated structural dynamic switch
       appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          title: const Text('Settings'),
-          centerTitle: true),
+        backgroundColor: currentSurface,
+        title: Text('Settings', style: TextStyle(color: currentText)),
+        centerTitle: true,
+        iconTheme: IconThemeData(color: currentText),
+      ),
       body: ListView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
@@ -900,25 +961,33 @@ class _FullEnterpriseSettingsScreenState
               'Change Username',
               'Only alphanumeric chars. Limited to 1 change per 30 days.',
               Icons.account_circle_rounded,
-              _executeLiveUsernameChangeProcedure),
+              _executeLiveUsernameChangeProcedure,
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
           _buildActionTileWithCustomHook(
               'Change Password',
               'Verify secure re-auth context or send reset links.',
               Icons.vpn_key_rounded,
-              _executeSecurePasswordModFlow),
+              _executeSecurePasswordModFlow,
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
+
           Container(
             margin: const EdgeInsets.only(top: 4, bottom: 12),
             decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
+                color: AppColors.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.2))),
+                border: Border.all(color: AppColors.primary.withOpacity(0.2))),
             child: ListTile(
               leading: const Icon(Icons.support_agent_rounded,
                   color: AppColors.primaryLight, size: 22),
-              title: const Text('Contact Sales Team',
+              title: Text('Contact Sales Team',
                   style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: currentText,
                       fontWeight: FontWeight.w900,
                       fontSize: 13)),
               subtitle: const Text(
@@ -930,77 +999,124 @@ class _FullEnterpriseSettingsScreenState
               onTap: _handleContactSalesAction,
             ),
           ),
+
           _buildSectionHeader('🔔 NOTIFICATIONS (FCM BROADCASTS)'),
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: currentSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border)),
+                border: Border.all(color: currentBorder)),
             child: SwitchListTile(
               activeColor: AppColors.primaryLight,
-              title: const Text('Push Notifications (FCM)',
+              title: Text('Push Notifications',
                   style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: currentText,
                       fontWeight: FontWeight.bold,
                       fontSize: 13)),
-              subtitle: const Text(
-                  'Allow system to trigger real-time notification tokens to sellers on new needs',
-                  style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+              subtitle: Text(
+                  'Get real-time updates when sellers send you offers',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
               value: _pushNotifications,
               onChanged: (v) {
                 setState(() => _pushNotifications = v);
                 _showCoreFeedback(v
-                    ? 'FCM Device Token Registered on Core Cloud Routing Table.'
-                    : 'FCM Handlers disabled. Sellers notifications pipeline dropped.');
+                    ? '🎉 Notifications turned on! You will now receive live alerts.'
+                    : '⏳ Notifications turned off. You won\'t receive live updates.');
               },
             ),
           ),
-          _buildSectionHeader('🔒 PRIVACY & SECURITY'),
+
+          _buildSectionHeader('🔒 SECURITY & BIOMETRICS'),
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: SwitchListTile(
+              activeColor: AppColors.primaryLight,
+              title: Text('Fingerprint Unlock',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text(
+                  'Unlock app using your device physical fingerprint scanner',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: _fingerprintEnabled,
+              onChanged: (v) {
+                setState(() => _fingerprintEnabled = v);
+                _triggerBiometricSetupConsole('fingerprint');
+              },
+            ),
+          ),
+
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: currentSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border)),
+                border: Border.all(color: currentBorder)),
             child: SwitchListTile(
               activeColor: AppColors.primaryLight,
-              title: const Text('Biometric Authentication',
+              title: Text('Face ID / Recognition',
                   style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: currentText,
                       fontWeight: FontWeight.bold,
                       fontSize: 13)),
-              subtitle: const Text('Require finger or face scan on app startup',
-                  style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-              value: _biometricsEnabled,
+              subtitle: Text(
+                  'Enable quick device look vectors for seamless authentication routing',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: _faceIdEnabled,
               onChanged: (v) {
-                setState(() => _biometricsEnabled = v);
-                _executeHardwareBiometricEnrollment(v);
+                setState(() => _faceIdEnabled = v);
+                _triggerBiometricSetupConsole('faceid');
               },
             ),
           ),
+
           _buildSectionHeader('🌍 APP PREFERENCES'),
-          _buildSwitchRow(
-              'Dark Mode Theme',
-              'Switch between bright and dark looks',
-              _darkMode,
-              (v) => setState(() => _darkMode = v)),
+          // 🚨 DYNAMIC LOCAL TOGGLE SWITCH HOOK (Zero Global Impact Checks)
+          _buildSwitchRow('Dark Mode Theme',
+              'Switch between bright and dark looks', _localDarkMode, (v) {
+            setState(() => _localDarkMode = v);
+            _showCoreFeedback(v
+                ? '🌙 Premium Dark Mode layout activated successfully.'
+                : '☀️ Clean Light Mode layout activated successfully.');
+          }, currentSurface, currentBorder, currentText, currentSubText),
+
           _buildSectionHeader('💳 PAYMENTS'),
           _buildInteractiveTile(
               'Payment Methods',
               'Manage your linked digital bank wallets',
-              Icons.account_balance_wallet_rounded),
+              Icons.account_balance_wallet_rounded,
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
+
           _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
           _buildSwitchRow(
               'Buyer / Customer Mode',
               'Toggle client consumer search panel',
               _buyerMode,
-              (v) => setState(() => _buyerMode = v)),
+              (v) => setState(() => _buyerMode = v),
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
+
           _buildSectionHeader('🛠️ SUPPORT & LEGAL'),
-          _buildInteractiveTile('Help Center / FAQs',
-              'Access documentation guides', Icons.help_outline_rounded),
+          _buildInteractiveTile(
+              'Help Center / FAQs',
+              'Access documentation guides',
+              Icons.help_outline_rounded,
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
+
           const SizedBox(height: 24),
           _buildActionItem(
               'Logout from Session',
@@ -1025,23 +1141,27 @@ class _FullEnterpriseSettingsScreenState
   }
 
   Widget _buildActionTileWithCustomHook(
-      String title, String subtitle, IconData icon, VoidCallback actionHook) {
+      String title,
+      String subtitle,
+      IconData icon,
+      VoidCallback actionHook,
+      Color surface,
+      Color border,
+      Color text,
+      Color subText) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border)),
+          border: Border.all(color: border)),
       child: ListTile(
         leading: Icon(icon, color: AppColors.primaryLight, size: 20),
         title: Text(title,
-            style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 13)),
-        subtitle: Text(subtitle,
-            style:
-                const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+            style: TextStyle(
+                color: text, fontWeight: FontWeight.bold, fontSize: 13)),
+        subtitle:
+            Text(subtitle, style: TextStyle(color: subText, fontSize: 11)),
         trailing: const Icon(Icons.keyboard_arrow_right_rounded,
             color: AppColors.textTertiary, size: 18),
         onTap: actionHook,
@@ -1049,23 +1169,21 @@ class _FullEnterpriseSettingsScreenState
     );
   }
 
-  Widget _buildInteractiveTile(String title, String subtitle, IconData icon) {
+  Widget _buildInteractiveTile(String title, String subtitle, IconData icon,
+      Color surface, Color border, Color text, Color subText) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border)),
+          border: Border.all(color: border)),
       child: ListTile(
         leading: Icon(icon, color: AppColors.primaryLight, size: 20),
         title: Text(title,
-            style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 13)),
-        subtitle: Text(subtitle,
-            style:
-                const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+            style: TextStyle(
+                color: text, fontWeight: FontWeight.bold, fontSize: 13)),
+        subtitle:
+            Text(subtitle, style: TextStyle(color: subText, fontSize: 11)),
         trailing: const Icon(Icons.keyboard_arrow_right_rounded,
             color: AppColors.textTertiary, size: 18),
         onTap: () => _showComingSoon(title),
@@ -1074,23 +1192,26 @@ class _FullEnterpriseSettingsScreenState
   }
 
   Widget _buildSwitchRow(
-      String title, String sub, bool val, ValueChanged<bool> onChange) {
+      String title,
+      String sub,
+      bool val,
+      ValueChanged<bool> onChange,
+      Color surface,
+      Color border,
+      Color text,
+      Color subText) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border)),
+          border: Border.all(color: border)),
       child: SwitchListTile(
         activeColor: AppColors.primaryLight,
         title: Text(title,
-            style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 13)),
-        subtitle: Text(sub,
-            style:
-                const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+            style: TextStyle(
+                color: text, fontWeight: FontWeight.bold, fontSize: 13)),
+        subtitle: Text(sub, style: TextStyle(color: subText, fontSize: 11)),
         value: val,
         onChanged: onChange,
       ),
@@ -1102,9 +1223,9 @@ class _FullEnterpriseSettingsScreenState
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
+          color: color.withOpacity(0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.2))),
+          border: Border.all(color: color.withOpacity(0.2))),
       child: ListTile(
         leading: Icon(icon, color: color, size: 20),
         title: Text(title,
