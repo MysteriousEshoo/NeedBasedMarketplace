@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'screens/main_shell.dart';
 import 'screens/auth_screen.dart';
 import 'theme/app_theme.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'providers/theme_provider.dart';
+import 'providers/settings_provider.dart'; // ✅ ADD THIS IMPORT
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Nayi exact keys jo tumhare screenshot mien hain:
   await Firebase.initializeApp(
     options: const FirebaseOptions(
       apiKey: "AIzaSyA1ZvbhOuNkRmvn9PFVgp_JJ6ZC_oqPwVc",
@@ -23,7 +24,15 @@ void main() async {
     ),
   );
 
-  runApp(const NeedMarketplaceApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()), // ✅ ADD THIS
+      ],
+      child: const NeedMarketplaceApp(),
+    ),
+  );
 }
 
 class NeedMarketplaceApp extends StatelessWidget {
@@ -31,26 +40,27 @@ class NeedMarketplaceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     return MaterialApp(
       title: 'NeedHub',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
+      theme: themeProvider.currentTheme,
+      darkTheme: AppTheme.dark,
+      themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          // 1. Agar internet slow ho aur token check ho raha ho, to loader dikhao
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
-          // 2. Agar snapshot mien data (user) maujood hai, to direct Home mien le jao
           if (snapshot.hasData) {
-            return const MainShell(); // Ya jo bhi tumhari main dashboard class hai
+            return const MainShell();
           }
 
-          // 3. Agar koi user login nahi hai, to login screen dikhao
           return const AuthScreen();
         },
       ),

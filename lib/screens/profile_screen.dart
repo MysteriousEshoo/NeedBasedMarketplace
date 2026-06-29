@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import 'need_detail_screen.dart';
 import 'payment_methods_screen.dart';
+import 'help_screen.dart';
+import '../providers/theme_provider.dart';
+import '../providers/settings_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,7 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _currentUserName = 'Loading...';
   String _currentUserEmail = 'Loading...';
   int _myNeedsCount = 0;
-  File? _selectedLocalImage; // Dynamic Local Storage Image Ref Holder
+  File? _selectedLocalImage;
 
   @override
   void initState() {
@@ -67,7 +71,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  /// 📸 EXPERT CORE 1: Hardware Image Picker Channel Context Hook
   Future<void> _executeNativeImageUpload() async {
     final ImagePicker picker = ImagePicker();
     try {
@@ -150,8 +153,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               GestureDetector(
-                onTap:
-                    _executeNativeImageUpload, // Direct hook for picture update
+                onTap: _executeNativeImageUpload,
                 child: Container(
                   width: 36,
                   height: 36,
@@ -311,6 +313,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Saved Offers Pipeline Screen
+// ----------------------------------------------------------------------------
+
 class _SavedOffersPipelineScreen extends StatelessWidget {
   const _SavedOffersPipelineScreen();
 
@@ -419,20 +425,9 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
 }
 
 // ----------------------------------------------------------------------------
-// FULL LIVE OPERATION: Dynamic Account Setup Settings Hub Console
+// FULL SETTINGS SCREEN - COMPLETE WITH PROVIDER INTEGRATION
 // ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-// PIPELINE 2: User-Friendly Production Settings Panel
-// ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-// PIPELINE 2: User-Friendly Production Settings Panel
-// ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-// PIPELINE 2: User-Friendly Production Settings Panel with Dual Biometrics
-// ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-// PIPELINE 2: Self-Contained Safe Settings Panel (Zero Global Errors)
-// ----------------------------------------------------------------------------
+
 class _FullEnterpriseSettingsScreen extends StatefulWidget {
   const _FullEnterpriseSettingsScreen();
 
@@ -447,10 +442,276 @@ class _FullEnterpriseSettingsScreenState
   bool _biometricsEnabled = false;
   bool _fingerprintEnabled = false;
   bool _faceIdEnabled = false;
-  bool _buyerMode = true;
 
-  // 🧬 LOCAL THEME STATE REGISTER (Isi screen ke liye isolated)
-  bool _localDarkMode = true;
+  @override
+  Widget build(BuildContext context) {
+    // ✅ Read theme from provider
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDarkMode = themeProvider.isDarkMode;
+
+    // ✅ Read settings from provider
+    final settingsProvider = Provider.of<SettingsProvider>(context);
+    final bool isBuyerMode = settingsProvider.isBuyerMode;
+
+    final Color currentBg =
+        isDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color currentSurface = isDarkMode ? AppColors.surface : Colors.white;
+    final Color currentBorder =
+        isDarkMode ? AppColors.border : const Color(0xFFCBD5E1);
+    final Color currentText =
+        isDarkMode ? AppColors.textPrimary : Colors.black87;
+    final Color currentSubText =
+        isDarkMode ? AppColors.textTertiary : Colors.black54;
+
+    return Scaffold(
+      backgroundColor: currentBg,
+      appBar: AppBar(
+        backgroundColor: currentSurface,
+        title: Text('Settings', style: TextStyle(color: currentText)),
+        centerTitle: true,
+        iconTheme: IconThemeData(color: currentText),
+        elevation: 0,
+      ),
+      body: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+        children: [
+          _buildSectionHeader('👤 PROFILE ACTIONS & SECURITY'),
+          _buildActionTileWithCustomHook(
+              'Change Username',
+              'Only alphanumeric chars. Limited to 1 change per 30 days.',
+              Icons.account_circle_rounded,
+              _executeLiveUsernameChangeProcedure,
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
+          _buildActionTileWithCustomHook(
+              'Change Password',
+              'Verify secure re-auth context or send reset links.',
+              Icons.vpn_key_rounded,
+              _executeSecurePasswordModFlow,
+              currentSurface,
+              currentBorder,
+              currentText,
+              currentSubText),
+
+          Container(
+            margin: const EdgeInsets.only(top: 4, bottom: 12),
+            decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primary.withOpacity(0.2))),
+            child: ListTile(
+              leading: const Icon(Icons.support_agent_rounded,
+                  color: AppColors.primaryLight, size: 22),
+              title: Text('Contact Sales Team',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13)),
+              subtitle: const Text(
+                  'Initiate direct call or compose official email channels',
+                  style:
+                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                  color: AppColors.textTertiary, size: 14),
+              onTap: _handleContactSalesAction,
+            ),
+          ),
+
+          _buildSectionHeader('🔔 NOTIFICATIONS (FCM BROADCASTS)'),
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: SwitchListTile(
+              activeColor: AppColors.primaryLight,
+              title: Text('Push Notifications',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text(
+                  'Get real-time updates when sellers send you offers',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: _pushNotifications,
+              onChanged: (v) {
+                setState(() => _pushNotifications = v);
+                _showCoreFeedback(v
+                    ? '🎉 Notifications turned on! You will now receive live alerts.'
+                    : '⏳ Notifications turned off. You won\'t receive live updates.');
+              },
+            ),
+          ),
+
+          _buildSectionHeader('🔒 SECURITY & BIOMETRICS'),
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: SwitchListTile(
+              activeColor: AppColors.primaryLight,
+              title: Text('Fingerprint Unlock',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text(
+                  'Unlock app using your device physical fingerprint scanner',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: _fingerprintEnabled,
+              onChanged: (v) {
+                setState(() => _fingerprintEnabled = v);
+                _triggerBiometricSetupConsole('fingerprint');
+              },
+            ),
+          ),
+
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: SwitchListTile(
+              activeColor: AppColors.primaryLight,
+              title: Text('Face ID / Recognition',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text(
+                  'Enable quick device look vectors for seamless authentication routing',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: _faceIdEnabled,
+              onChanged: (v) {
+                setState(() => _faceIdEnabled = v);
+                _triggerBiometricSetupConsole('faceid');
+              },
+            ),
+          ),
+
+          _buildSectionHeader('🌍 APP PREFERENCES'),
+          _buildSwitchRow(
+            'Dark Mode Theme',
+            'Switch between bright and dark looks',
+            isDarkMode,
+            (v) {
+              themeProvider.setDarkMode(v);
+              _showCoreFeedback(v
+                  ? '🌙 Premium Dark Mode activated successfully.'
+                  : '☀️ Clean Light Mode activated successfully.');
+            },
+            currentSurface,
+            currentBorder,
+            currentText,
+            currentSubText,
+          ),
+
+          _buildSectionHeader('💳 PAYMENTS'),
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: ListTile(
+              leading: const Icon(Icons.account_balance_wallet_rounded,
+                  color: AppColors.primaryLight, size: 20),
+              title: Text('Payment Methods',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text('Manage your linked digital bank wallets',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              trailing: const Icon(Icons.keyboard_arrow_right_rounded,
+                  color: AppColors.textTertiary, size: 18),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const PaymentMethodsScreen()),
+                );
+              },
+            ),
+          ),
+
+          _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
+          // ✅ BUYER MODE - DYNAMIC WITH FIREBASE
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: SwitchListTile(
+              activeColor: AppColors.primaryLight,
+              title: Text('Buyer / Customer Mode',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text('Toggle client consumer search panel',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: isBuyerMode,
+              onChanged: (v) async {
+                await settingsProvider.toggleBuyerMode();
+                _showCoreFeedback(v
+                    ? '🛒 Buyer Mode activated. You are now viewing as a customer.'
+                    : '📦 Provider Mode activated. You are now viewing as a fulfiller.');
+              },
+            ),
+          ),
+
+          _buildSectionHeader('🛠️ SUPPORT & LEGAL'),
+          // ✅ HELP & FAQ - DYNAMIC WITH NAVIGATION
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: ListTile(
+              leading: const Icon(Icons.help_outline_rounded,
+                  color: AppColors.primaryLight, size: 20),
+              title: Text('Help Center / FAQs',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text('Access documentation guides',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              trailing: const Icon(Icons.keyboard_arrow_right_rounded,
+                  color: AppColors.textTertiary, size: 18),
+              
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const HelpScreen()), // ✅ HelpScreen
+                    );
+                  },
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          _buildActionItem(
+              'Logout from Session',
+              'Disconnect current active user authentication tokens',
+              Icons.power_settings_new_rounded,
+              AppColors.urgentMedium),
+        ],
+      ),
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Helper Methods (Same as before with isDarkMode fix)
+  // --------------------------------------------------------------------------
 
   void _triggerBiometricSetupConsole(String type) async {
     bool isFingerprint = type == 'fingerprint';
@@ -465,6 +726,10 @@ class _FullEnterpriseSettingsScreenState
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
+        final themeProvider =
+            Provider.of<ThemeProvider>(context, listen: false);
+        final bool isDarkMode = themeProvider.isDarkMode;
+
         Future.delayed(const Duration(milliseconds: 2500), () {
           if (!mounted) return;
           Navigator.pop(context);
@@ -472,12 +737,11 @@ class _FullEnterpriseSettingsScreenState
               '🎉 ${isFingerprint ? "Fingerprint" : "Face ID"} activation setup completed successfully!');
         });
 
-        // Dynamic design adapted to local theme state safely
-        final Color popBg = _localDarkMode ? AppColors.surface : Colors.white;
+        final Color popBg = isDarkMode ? AppColors.surface : Colors.white;
         final Color popText =
-            _localDarkMode ? AppColors.textPrimary : Colors.black87;
+            isDarkMode ? AppColors.textPrimary : Colors.black87;
         final Color popSubText =
-            _localDarkMode ? AppColors.textSecondary : Colors.black54;
+            isDarkMode ? AppColors.textSecondary : Colors.black54;
 
         return AlertDialog(
           backgroundColor: popBg,
@@ -563,9 +827,13 @@ class _FullEnterpriseSettingsScreenState
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
-        final Color popBg = _localDarkMode ? AppColors.surface : Colors.white;
+        final themeProvider =
+            Provider.of<ThemeProvider>(context, listen: false);
+        final bool isDarkMode = themeProvider.isDarkMode;
+
+        final Color popBg = isDarkMode ? AppColors.surface : Colors.white;
         final Color popText =
-            _localDarkMode ? AppColors.textPrimary : Colors.black87;
+            isDarkMode ? AppColors.textPrimary : Colors.black87;
         return AlertDialog(
           backgroundColor: popBg,
           shape: RoundedRectangleBorder(
@@ -649,9 +917,13 @@ class _FullEnterpriseSettingsScreenState
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
-        final Color popBg = _localDarkMode ? AppColors.surface : Colors.white;
+        final themeProvider =
+            Provider.of<ThemeProvider>(context, listen: false);
+        final bool isDarkMode = themeProvider.isDarkMode;
+
+        final Color popBg = isDarkMode ? AppColors.surface : Colors.white;
         final Color popText =
-            _localDarkMode ? AppColors.textPrimary : Colors.black87;
+            isDarkMode ? AppColors.textPrimary : Colors.black87;
         return AlertDialog(
           backgroundColor: popBg,
           shape: RoundedRectangleBorder(
@@ -785,35 +1057,41 @@ class _FullEnterpriseSettingsScreenState
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          backgroundColor: _localDarkMode ? AppColors.surface : Colors.white,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: AppColors.accent)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.mark_email_read_rounded,
-                  size: 48, color: AppColors.accent),
-              const SizedBox(height: 14),
-              Text(
-                'TRANSMISSION SENT',
-                style: TextStyle(
-                    color:
-                        _localDarkMode ? AppColors.textPrimary : Colors.black87,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    letterSpacing: 0.5),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                  'A link has been sent to $maskedEmail. Check your inbox to safely update configuration mappings.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12)),
-            ],
-          ),
-        ),
+        builder: (context) {
+          final themeProvider =
+              Provider.of<ThemeProvider>(context, listen: false);
+          final bool isDarkMode = themeProvider.isDarkMode;
+
+          return AlertDialog(
+            backgroundColor: isDarkMode ? AppColors.surface : Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.accent)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.mark_email_read_rounded,
+                    size: 48, color: AppColors.accent),
+                const SizedBox(height: 14),
+                Text(
+                  'TRANSMISSION SENT',
+                  style: TextStyle(
+                      color:
+                          isDarkMode ? AppColors.textPrimary : Colors.black87,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                    'A link has been sent to $maskedEmail. Check your inbox to safely update configuration mappings.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+          );
+        },
       );
 
       await Future.delayed(const Duration(seconds: 5));
@@ -827,89 +1105,98 @@ class _FullEnterpriseSettingsScreenState
   void _showSecureAlertPopup(String title, String desc) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _localDarkMode ? AppColors.surface : Colors.white,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: AppColors.urgentHigh)),
-        title: Text(title,
-            style: const TextStyle(
-                color: AppColors.urgentHigh,
-                fontWeight: FontWeight.bold,
-                fontSize: 15)),
-        content: Text(desc,
-            style:
-                const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Acknowledged',
-                  style: TextStyle(color: AppColors.primaryLight)))
-        ],
-      ),
+      builder: (context) {
+        final themeProvider =
+            Provider.of<ThemeProvider>(context, listen: false);
+        final bool isDarkMode = themeProvider.isDarkMode;
+
+        return AlertDialog(
+          backgroundColor: isDarkMode ? AppColors.surface : Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.urgentHigh)),
+          title: Text(title,
+              style: const TextStyle(
+                  color: AppColors.urgentHigh,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15)),
+          content: Text(desc,
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 13)),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Acknowledged',
+                    style: TextStyle(color: AppColors.primaryLight)))
+          ],
+        );
+      },
     );
   }
 
   void _handleContactSalesAction() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _localDarkMode ? AppColors.surface : Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('CONTACT SALES REPRESENTATIVE',
-                style: TextStyle(
-                    color: AppColors.accent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1)),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.phone_in_talk_rounded,
-                  color: AppColors.primaryLight),
-              title: Text('Direct Phone Channel',
+      builder: (context) {
+        final themeProvider =
+            Provider.of<ThemeProvider>(context, listen: false);
+        final bool isDarkMode = themeProvider.isDarkMode;
+
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('CONTACT SALES REPRESENTATIVE',
                   style: TextStyle(
-                      color: _localDarkMode
-                          ? AppColors.textPrimary
-                          : Colors.black87,
-                      fontWeight: FontWeight.bold)),
-              subtitle: const Text(
-                  'Tap to invoke device system dial pad launcher',
-                  style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-              onTap: () {
-                Navigator.pop(context);
-                _showCoreFeedback(
-                    'Invoking device dial pad context for [+92 300 1234567]...');
-              },
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.mail_outline_rounded,
-                  color: AppColors.primaryLight),
-              title: Text('Official Corporate Mailbox',
-                  style: TextStyle(
-                      color: _localDarkMode
-                          ? AppColors.textPrimary
-                          : Colors.black87,
-                      fontWeight: FontWeight.bold)),
-              subtitle: const Text('Compose a direct contract transmission',
-                  style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-              onTap: () {
-                Navigator.pop(context);
-                _showCoreFeedback(
-                    'Launching local mail context to [sales@marketplace.com]...');
-              },
-            ),
-          ],
-        ),
-      ),
+                      color: AppColors.accent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.phone_in_talk_rounded,
+                    color: AppColors.primaryLight),
+                title: Text('Direct Phone Channel',
+                    style: TextStyle(
+                        color:
+                            isDarkMode ? AppColors.textPrimary : Colors.black87,
+                        fontWeight: FontWeight.bold)),
+                subtitle: const Text(
+                    'Tap to invoke device system dial pad launcher',
+                    style:
+                        TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showCoreFeedback(
+                      'Invoking device dial pad context for [+92 300 1234567]...');
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.mail_outline_rounded,
+                    color: AppColors.primaryLight),
+                title: Text('Official Corporate Mailbox',
+                    style: TextStyle(
+                        color:
+                            isDarkMode ? AppColors.textPrimary : Colors.black87,
+                        fontWeight: FontWeight.bold)),
+                subtitle: const Text('Compose a direct contract transmission',
+                    style:
+                        TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showCoreFeedback(
+                      'Launching local mail context to [sales@marketplace.com]...');
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -931,221 +1218,9 @@ class _FullEnterpriseSettingsScreenState
         behavior: SnackBarBehavior.floating));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // 🎨 CHOOSE COLORS BASED ON ISOLATED SYSTEM STATE
-    final Color currentBg =
-        _localDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
-    final Color currentSurface =
-        _localDarkMode ? AppColors.surface : Colors.white;
-    final Color currentBorder =
-        _localDarkMode ? AppColors.border : const Color(0xFFCBD5E1);
-    final Color currentText =
-        _localDarkMode ? AppColors.textPrimary : Colors.black87;
-    final Color currentSubText =
-        _localDarkMode ? AppColors.textTertiary : Colors.black54;
-
-    return Scaffold(
-      backgroundColor: currentBg, // Isolated structural dynamic switch
-      appBar: AppBar(
-        backgroundColor: currentSurface,
-        title: Text('Settings', style: TextStyle(color: currentText)),
-        centerTitle: true,
-        iconTheme: IconThemeData(color: currentText),
-      ),
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-        children: [
-          _buildSectionHeader('👤 PROFILE ACTIONS & SECURITY'),
-          _buildActionTileWithCustomHook(
-              'Change Username',
-              'Only alphanumeric chars. Limited to 1 change per 30 days.',
-              Icons.account_circle_rounded,
-              _executeLiveUsernameChangeProcedure,
-              currentSurface,
-              currentBorder,
-              currentText,
-              currentSubText),
-          _buildActionTileWithCustomHook(
-              'Change Password',
-              'Verify secure re-auth context or send reset links.',
-              Icons.vpn_key_rounded,
-              _executeSecurePasswordModFlow,
-              currentSurface,
-              currentBorder,
-              currentText,
-              currentSubText),
-
-          Container(
-            margin: const EdgeInsets.only(top: 4, bottom: 12),
-            decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primary.withOpacity(0.2))),
-            child: ListTile(
-              leading: const Icon(Icons.support_agent_rounded,
-                  color: AppColors.primaryLight, size: 22),
-              title: Text('Contact Sales Team',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13)),
-              subtitle: const Text(
-                  'Initiate direct call or compose official email channels',
-                  style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                  color: AppColors.textTertiary, size: 14),
-              onTap: _handleContactSalesAction,
-            ),
-          ),
-
-          _buildSectionHeader('🔔 NOTIFICATIONS (FCM BROADCASTS)'),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Push Notifications',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text(
-                  'Get real-time updates when sellers send you offers',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _pushNotifications,
-              onChanged: (v) {
-                setState(() => _pushNotifications = v);
-                _showCoreFeedback(v
-                    ? '🎉 Notifications turned on! You will now receive live alerts.'
-                    : '⏳ Notifications turned off. You won\'t receive live updates.');
-              },
-            ),
-          ),
-
-          _buildSectionHeader('🔒 SECURITY & BIOMETRICS'),
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Fingerprint Unlock',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text(
-                  'Unlock app using your device physical fingerprint scanner',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _fingerprintEnabled,
-              onChanged: (v) {
-                setState(() => _fingerprintEnabled = v);
-                _triggerBiometricSetupConsole('fingerprint');
-              },
-            ),
-          ),
-
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Face ID / Recognition',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text(
-                  'Enable quick device look vectors for seamless authentication routing',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _faceIdEnabled,
-              onChanged: (v) {
-                setState(() => _faceIdEnabled = v);
-                _triggerBiometricSetupConsole('faceid');
-              },
-            ),
-          ),
-
-          _buildSectionHeader('🌍 APP PREFERENCES'),
-          // 🚨 DYNAMIC LOCAL TOGGLE SWITCH HOOK (Zero Global Impact Checks)
-          _buildSwitchRow('Dark Mode Theme',
-              'Switch between bright and dark looks', _localDarkMode, (v) {
-            setState(() => _localDarkMode = v);
-            _showCoreFeedback(v
-                ? '🌙 Premium Dark Mode layout activated successfully.'
-                : '☀️ Clean Light Mode layout activated successfully.');
-          }, currentSurface, currentBorder, currentText, currentSubText),
-
-          _buildSectionHeader('💳 PAYMENTS'),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: ListTile(
-              leading: const Icon(Icons.account_balance_wallet_rounded,
-                  color: AppColors.primaryLight, size: 20),
-              title: Text('Payment Methods',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text('Manage your linked digital bank wallets',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              trailing: const Icon(Icons.keyboard_arrow_right_rounded,
-                  color: AppColors.textTertiary, size: 18),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const PaymentMethodsScreen()),
-                );
-              },
-            ),
-          ),
-
-          _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
-          _buildSwitchRow(
-              'Buyer / Customer Mode',
-              'Toggle client consumer search panel',
-              _buyerMode,
-              (v) => setState(() => _buyerMode = v),
-              currentSurface,
-              currentBorder,
-              currentText,
-              currentSubText),
-
-          _buildSectionHeader('🛠️ SUPPORT & LEGAL'),
-          _buildInteractiveTile(
-              'Help Center / FAQs',
-              'Access documentation guides',
-              Icons.help_outline_rounded,
-              currentSurface,
-              currentBorder,
-              currentText,
-              currentSubText),
-
-          const SizedBox(height: 24),
-          _buildActionItem(
-              'Logout from Session',
-              'Disconnect current active user authentication tokens',
-              Icons.power_settings_new_rounded,
-              AppColors.urgentMedium),
-        ],
-      ),
-    );
-  }
+  // --------------------------------------------------------------------------
+  // Build Helper Widgets
+  // --------------------------------------------------------------------------
 
   Widget _buildSectionHeader(String title) {
     return Padding(
@@ -1184,28 +1259,6 @@ class _FullEnterpriseSettingsScreenState
         trailing: const Icon(Icons.keyboard_arrow_right_rounded,
             color: AppColors.textTertiary, size: 18),
         onTap: actionHook,
-      ),
-    );
-  }
-
-  Widget _buildInteractiveTile(String title, String subtitle, IconData icon,
-      Color surface, Color border, Color text, Color subText) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border)),
-      child: ListTile(
-        leading: Icon(icon, color: AppColors.primaryLight, size: 20),
-        title: Text(title,
-            style: TextStyle(
-                color: text, fontWeight: FontWeight.bold, fontSize: 13)),
-        subtitle:
-            Text(subtitle, style: TextStyle(color: subText, fontSize: 11)),
-        trailing: const Icon(Icons.keyboard_arrow_right_rounded,
-            color: AppColors.textTertiary, size: 18),
-        onTap: () => _showComingSoon(title),
       ),
     );
   }
@@ -1265,6 +1318,10 @@ class _FullEnterpriseSettingsScreenState
     );
   }
 }
+
+// ----------------------------------------------------------------------------
+// My Needs Screen
+// ----------------------------------------------------------------------------
 
 class _MyNeedsScreen extends StatelessWidget {
   final String authorName;
