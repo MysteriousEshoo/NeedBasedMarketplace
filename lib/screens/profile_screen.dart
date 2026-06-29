@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import 'need_detail_screen.dart';
+import 'payment_methods_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -1087,14 +1088,32 @@ class _FullEnterpriseSettingsScreenState
           }, currentSurface, currentBorder, currentText, currentSubText),
 
           _buildSectionHeader('💳 PAYMENTS'),
-          _buildInteractiveTile(
-              'Payment Methods',
-              'Manage your linked digital bank wallets',
-              Icons.account_balance_wallet_rounded,
-              currentSurface,
-              currentBorder,
-              currentText,
-              currentSubText),
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: ListTile(
+              leading: const Icon(Icons.account_balance_wallet_rounded,
+                  color: AppColors.primaryLight, size: 20),
+              title: Text('Payment Methods',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text('Manage your linked digital bank wallets',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              trailing: const Icon(Icons.keyboard_arrow_right_rounded,
+                  color: AppColors.textTertiary, size: 18),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const PaymentMethodsScreen()),
+                );
+              },
+            ),
+          ),
 
           _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
           _buildSwitchRow(
