@@ -4,7 +4,8 @@ import 'screens/main_shell.dart';
 import 'screens/auth_screen.dart';
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
-import 'providers/settings_provider.dart'; // ✅ ADD THIS IMPORT
+import 'providers/settings_provider.dart';
+import 'providers/payment_provider.dart'; // ✅ ADD THIS
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -28,7 +29,8 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()), // ✅ ADD THIS
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => PaymentProvider()), // ✅ ADD THIS
       ],
       child: const NeedMarketplaceApp(),
     ),
