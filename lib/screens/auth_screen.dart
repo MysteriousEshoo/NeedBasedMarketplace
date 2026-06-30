@@ -4,12 +4,13 @@ import '../theme/app_colors.dart';
 import '../widgets/primary_loading_button.dart';
 import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Screen 1 — Premium dual authentication interface.
 ///
 /// A single screen hosts both Login and Sign Up via an animated segmented
 /// tab control. Inputs use floating labels, leading icons and live
-/// validation styling. Social and phone auth are offered as custom buttons.
+/// validation styling. Google Sign-In is fully wired to Firebase Auth.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -25,9 +26,12 @@ class _AuthScreenState extends State<AuthScreen>
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _isSubmitting = false;
+  bool _isGoogleSubmitting = false;
 
   bool get _isLogin => _tabController.index == 0;
 
@@ -50,7 +54,29 @@ class _AuthScreenState extends State<AuthScreen>
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _goToMainShell() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 450),
+        pageBuilder: (_, animation, __) => const MainShell(),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            child: child,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -66,33 +92,23 @@ class _AuthScreenState extends State<AuthScreen>
         );
       } else {
         // Asli Firebase Sign Up (Register) Logic
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        final credential =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
+
+        // Naam ko Firebase profile mein save karo
+        final name = _nameController.text.trim();
+        if (name.isNotEmpty) {
+          await credential.user?.updateDisplayName(name);
+          await credential.user?.reload();
+        }
       }
 
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-
-      // Agar login/signup successful ho jaye, to agli screen par le jao
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 450),
-          pageBuilder: (_, animation, __) => const MainShell(),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.04),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                  parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          ),
-        ),
-      );
+      _goToMainShell();
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -101,6 +117,66 @@ class _AuthScreenState extends State<AuthScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message ?? 'An error occurred. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleSubmitting = true);
+
+    try {
+      // google_sign_in v7+ singleton instance
+      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+
+      // Plugin ko initialize karo (sirf ek baar chalta hai, dobara call karna safe hai)
+      await googleSignIn.initialize();
+
+      // User ko Google account picker dikhao
+      final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
+
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      if (!mounted) return;
+      setState(() => _isGoogleSubmitting = false);
+      _goToMainShell();
+    } on GoogleSignInException catch (e) {
+      if (!mounted) return;
+      setState(() => _isGoogleSubmitting = false);
+
+      // User ne cancel kiya to chup chap wapis chale jao, error mat dikhao
+      if (e.code == GoogleSignInExceptionCode.canceled) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(e.description ?? 'Google sign-in failed. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isGoogleSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(e.message ?? 'Google sign-in failed. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isGoogleSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google sign-in failed. Please try again.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -284,6 +360,42 @@ class _AuthScreenState extends State<AuthScreen>
                   setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
+          // Confirm Password field only appears in Sign Up mode.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: _isLogin
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: _PremiumField(
+                      controller: _confirmPasswordController,
+                      label: 'Confirm password',
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: _obscureConfirmPassword,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Please confirm your password';
+                        }
+                        if (v != _passwordController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                      suffix: IconButton(
+                        splashRadius: 20,
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.textSecondary,
+                        ),
+                        onPressed: () => setState(() =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword),
+                      ),
+                    ),
+                  ),
+          ),
           if (_isLogin)
             Align(
               alignment: Alignment.centerRight,
@@ -327,9 +439,19 @@ class _AuthScreenState extends State<AuthScreen>
     return Column(
       children: [
         OutlinedButton.icon(
-          onPressed: () {},
-          icon: const _GoogleGlyph(),
-          label: const Text('Sign in with Google'),
+          onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
+          icon: _isGoogleSubmitting
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
+                )
+              : const _GoogleGlyph(),
+          label: Text(
+              _isGoogleSubmitting ? 'Signing in...' : 'Sign in with Google'),
         ),
         const SizedBox(height: 14),
         OutlinedButton.icon(

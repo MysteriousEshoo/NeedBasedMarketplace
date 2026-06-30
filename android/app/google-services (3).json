@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "976134004608",
+    "firebase_url": "https://needbasedmarketplace-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "needbasedmarketplace",
+    "storage_bucket": "needbasedmarketplace.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:976134004608:android:1d48ec9ea544c31db16b65",
+        "android_client_info": {
+          "package_name": "com.esha.marketplace"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "976134004608-jqoc9m68j45n932duk3ni6g0rqeupa18.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.esha.marketplace",
+            "certificate_hash": "a789e505c817a122ea906ea6eaa3d48b3a30ab18"
+          }
+        },
+        {
+          "client_id": "976134004608-hg1l8vbi7r5bc6d48qqa42gne6uvnv1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnRoxBCDxNySdLvRR_TasGhpFm7QGDrGM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "976134004608-hg1l8vbi7r5bc6d48qqa42gne6uvnv1p.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

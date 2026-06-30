@@ -99,17 +99,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Theme-aware colors — drive every widget on this screen.
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDarkMode = themeProvider.isDarkMode;
+
+    final Color bg =
+        isDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color surface = isDarkMode ? AppColors.surface : Colors.white;
+    final Color border =
+        isDarkMode ? AppColors.border : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDarkMode ? AppColors.textPrimary : const Color(0xFF0F172A);
+    final Color textSecondary =
+        isDarkMode ? AppColors.textSecondary : const Color(0xFF475569);
+    final Color textTertiary =
+        isDarkMode ? AppColors.textTertiary : const Color(0xFF94A3B8);
+    final Color headerGradientTop =
+        isDarkMode ? const Color(0xFF0F1524) : Colors.white;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
-            _buildGradientHeader(),
+            _buildGradientHeader(
+              headerGradientTop: headerGradientTop,
+              bg: bg,
+              surface: surface,
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+            ),
             const SizedBox(height: 20),
-            _buildStatsRow(),
+            _buildStatsRow(
+              surface: surface,
+              border: border,
+              textPrimary: textPrimary,
+              textTertiary: textTertiary,
+            ),
             const SizedBox(height: 28),
-            _buildMenuList(),
+            _buildMenuList(
+              surface: surface,
+              border: border,
+              textPrimary: textPrimary,
+            ),
             const SizedBox(height: 40),
           ],
         ),
@@ -117,13 +150,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildGradientHeader() {
+  Widget _buildGradientHeader({
+    required Color headerGradientTop,
+    required Color bg,
+    required Color surface,
+    required Color textPrimary,
+    required Color textSecondary,
+  }) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF0F1524), AppColors.background],
+          colors: [headerGradientTop, bg],
         ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
@@ -141,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: ClipOval(
                   child: CircleAvatar(
-                    backgroundColor: AppColors.surface,
+                    backgroundColor: surface,
                     backgroundImage: _selectedLocalImage != null
                         ? FileImage(_selectedLocalImage!)
                         : null,
@@ -168,17 +207,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           Text(
             _currentUserName,
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
+                color: textPrimary,
                 fontSize: 24,
                 letterSpacing: -0.5),
           ),
           const SizedBox(height: 4),
           Text(
             _currentUserEmail,
-            style: const TextStyle(
-                color: AppColors.textSecondary,
+            style: TextStyle(
+                color: textSecondary,
                 fontWeight: FontWeight.w500,
                 fontSize: 13),
           ),
@@ -187,46 +226,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow({
+    required Color surface,
+    required Color border,
+    required Color textPrimary,
+    required Color textTertiary,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildStatCard(
-              Icons.description_rounded, 'My Needs', '$_myNeedsCount'),
-          _buildStatCard(Icons.handshake_rounded, 'Active Offers', '3'),
-          _buildStatCard(
-              Icons.verified_user_rounded, 'Status', 'Verified User'),
+          _buildStatCard(Icons.description_rounded, 'My Needs',
+              '$_myNeedsCount', surface, border, textPrimary, textTertiary),
+          _buildStatCard(Icons.handshake_rounded, 'Active Offers', '3', surface,
+              border, textPrimary, textTertiary),
+          _buildStatCard(Icons.verified_user_rounded, 'Status', 'Verified User',
+              surface, border, textPrimary, textTertiary),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(IconData icon, String label, String value) {
+  Widget _buildStatCard(IconData icon, String label, String value,
+      Color surface, Color border, Color textPrimary, Color textTertiary) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: border),
         ),
         child: Column(
           children: [
             Icon(icon, color: AppColors.primaryLight, size: 22),
             const SizedBox(height: 8),
             Text(value,
-                style: const TextStyle(
+                style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: textPrimary,
                     fontSize: 16)),
             const SizedBox(height: 2),
             Text(label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: AppColors.textTertiary,
+                style: TextStyle(
+                    color: textTertiary,
                     fontSize: 10,
                     fontWeight: FontWeight.w600)),
           ],
@@ -235,7 +281,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMenuList() {
+  Widget _buildMenuList({
+    required Color surface,
+    required Color border,
+    required Color textPrimary,
+  }) {
     final sections = [
       {
         'title': 'MY STUFF',
@@ -285,15 +335,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border)),
+                      border: Border.all(color: border)),
                   child: ListTile(
                     leading: Icon(item['icon'] as IconData,
                         color: AppColors.primaryLight, size: 22),
                     title: Text(item['label'] as String,
-                        style: const TextStyle(
-                            color: AppColors.textPrimary,
+                        style: TextStyle(
+                            color: textPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 14)),
                     trailing: const Icon(Icons.arrow_forward_ios_rounded,
@@ -322,17 +372,31 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDarkMode = themeProvider.isDarkMode;
+    final Color bg =
+        isDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color surface = isDarkMode ? AppColors.surface : Colors.white;
+    final Color border =
+        isDarkMode ? AppColors.border : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDarkMode ? AppColors.textPrimary : const Color(0xFF0F172A);
+    final Color textSecondary =
+        isDarkMode ? AppColors.textSecondary : const Color(0xFF475569);
+
     final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          title: const Text('Saved Requirements'),
+          backgroundColor: surface,
+          title:
+              Text('Saved Requirements', style: TextStyle(color: textPrimary)),
+          iconTheme: IconThemeData(color: textPrimary),
           centerTitle: true),
       body: user == null
-          ? const Center(
+          ? Center(
               child: Text('Session missing.',
-                  style: TextStyle(color: Colors.white)))
+                  style: TextStyle(color: textPrimary)))
           : StreamBuilder(
               stream: FirebaseDatabase.instance
                   .ref()
@@ -340,13 +404,14 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
                   .child(user.uid)
                   .onValue,
               builder: (context, AsyncSnapshot<DatabaseEvent> savedSnapshot) {
-                if (savedSnapshot.connectionState == ConnectionState.waiting)
+                if (savedSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 if (!savedSnapshot.hasData ||
                     savedSnapshot.data!.snapshot.value == null) {
-                  return const Center(
+                  return Center(
                       child: Text('No bookmarked items found.',
-                          style: TextStyle(color: AppColors.textSecondary)));
+                          style: TextStyle(color: textSecondary)));
                 }
 
                 final Map<dynamic, dynamic> savedMap =
@@ -360,8 +425,9 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
                   builder: (context,
                       AsyncSnapshot<DatabaseEvent> masterFeedSnapshot) {
                     if (masterFeedSnapshot.connectionState ==
-                        ConnectionState.waiting)
+                        ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
+                    }
 
                     List<Need> bookmarkedList = [];
                     if (masterFeedSnapshot.hasData &&
@@ -394,10 +460,10 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final need = bookmarkedList[index];
                         return Card(
-                          color: AppColors.surface,
+                          color: surface,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
-                              side: const BorderSide(color: AppColors.border)),
+                              side: BorderSide(color: border)),
                           child: ListTile(
                             onTap: () => Navigator.push(
                                 context,
@@ -405,9 +471,9 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
                                     builder: (_) =>
                                         NeedDetailScreen(need: need))),
                             title: Text(need.title,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary)),
+                                    color: textPrimary)),
                             trailing: Text('Rs. ${need.budget}',
                                 style: const TextStyle(
                                     color: AppColors.accent,
@@ -439,7 +505,6 @@ class _FullEnterpriseSettingsScreen extends StatefulWidget {
 class _FullEnterpriseSettingsScreenState
     extends State<_FullEnterpriseSettingsScreen> {
   bool _pushNotifications = true;
-  bool _biometricsEnabled = false;
   bool _fingerprintEnabled = false;
   bool _faceIdEnabled = false;
 
@@ -688,13 +753,12 @@ class _FullEnterpriseSettingsScreenState
                   style: TextStyle(color: currentSubText, fontSize: 11)),
               trailing: const Icon(Icons.keyboard_arrow_right_rounded,
                   color: AppColors.textTertiary, size: 18),
-              
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const HelpScreen()), // ✅ HelpScreen
-                    );
-                  },
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const HelpScreen()), // ✅ HelpScreen
+                );
+              },
             ),
           ),
 
@@ -710,7 +774,7 @@ class _FullEnterpriseSettingsScreenState
   }
 
   // --------------------------------------------------------------------------
-  // Helper Methods (Same as before with isDarkMode fix)
+  // Helper Methods
   // --------------------------------------------------------------------------
 
   void _triggerBiometricSetupConsole(String type) async {
@@ -1329,17 +1393,32 @@ class _MyNeedsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDarkMode = themeProvider.isDarkMode;
+    final Color bg =
+        isDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color surface = isDarkMode ? AppColors.surface : Colors.white;
+    final Color border =
+        isDarkMode ? AppColors.border : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDarkMode ? AppColors.textPrimary : const Color(0xFF0F172A);
+    final Color textSecondary =
+        isDarkMode ? AppColors.textSecondary : const Color(0xFF475569);
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          title: const Text('My Active Requirements'),
+          backgroundColor: surface,
+          title: Text('My Active Requirements',
+              style: TextStyle(color: textPrimary)),
+          iconTheme: IconThemeData(color: textPrimary),
           centerTitle: true),
       body: StreamBuilder(
         stream: FirebaseDatabase.instance.ref().child('needs').onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
 
           List<Need> myFilteredList = [];
           if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
@@ -1365,9 +1444,9 @@ class _MyNeedsScreen extends StatelessWidget {
           }
 
           if (myFilteredList.isEmpty) {
-            return const Center(
+            return Center(
                 child: Text('You haven\'t posted any requirements yet.',
-                    style: TextStyle(color: AppColors.textSecondary)));
+                    style: TextStyle(color: textSecondary)));
           }
 
           return ListView.separated(
@@ -1377,10 +1456,10 @@ class _MyNeedsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = myFilteredList[index];
               return Card(
-                color: AppColors.surface,
+                color: surface,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppColors.border)),
+                    side: BorderSide(color: border)),
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(16),
                   onTap: () => Navigator.push(
@@ -1388,13 +1467,12 @@ class _MyNeedsScreen extends StatelessWidget {
                       MaterialPageRoute(
                           builder: (_) => NeedDetailScreen(need: item))),
                   title: Text(item.title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary)),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: textPrimary)),
                   subtitle: Text(item.description,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.textSecondary)),
+                      style: TextStyle(color: textSecondary)),
                   trailing: Text('Rs. ${item.budget}',
                       style: const TextStyle(
                           color: AppColors.accent,
