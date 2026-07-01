@@ -131,7 +131,11 @@ class _AuthScreenState extends State<AuthScreen>
       final GoogleSignIn googleSignIn = GoogleSignIn.instance;
 
       // Plugin ko initialize karo (sirf ek baar chalta hai, dobara call karna safe hai)
-      await googleSignIn.initialize();
+      // serverClientId Android ke liye zaroori hai — Firebase Web OAuth Client ID
+      await googleSignIn.initialize(
+        serverClientId:
+            '976134004608-hg1l8vbi7r5bc6d48qqa42gne6uvnv1p.apps.googleusercontent.com',
+      );
 
       // User ko Google account picker dikhao
       final GoogleSignInAccount googleUser = await googleSignIn.authenticate();

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/pill_tag.dart';
 import '../widgets/three_d_glass_card.dart';
 
@@ -23,7 +25,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategory = 'All';
-  String _searchQuery = ''; // Live search filter holder
+  String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -34,7 +36,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🧠 Dynamic Multi-Filter Pipeline (Category + Search Query Text matching)
+    // ✅ Theme-aware colors
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDark = themeProvider.isDarkMode;
+
+    final Color bg = isDark ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color surface = isDark ? AppColors.surface : Colors.white;
+    final Color border = isDark ? AppColors.border : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
+    final Color textSecondary =
+        isDark ? AppColors.textSecondary : const Color(0xFF475569);
+    final Color textTertiary =
+        isDark ? AppColors.textTertiary : const Color(0xFF94A3B8);
+
     final filteredNeeds = widget.needs.where((need) {
       final matchesCategory =
           _selectedCategory == 'All' || need.category == _selectedCategory;
@@ -47,23 +62,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       body: SafeArea(
         bottom: false,
         child: GestureDetector(
-          onTap: () => FocusScope.of(context)
-              .unfocus(), // Tap outside to close keyboard safely
+          onTap: () => FocusScope.of(context).unfocus(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildCyberpunkHeader(),
-              _build3DSearchBar(), // 🛸 NEW: Interactive 3D Search Hub injected here
+              _buildHeader(textPrimary: textPrimary),
+              _buildSearchBar(
+                  surface: surface,
+                  border: border,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  textTertiary: textTertiary,
+                  isDark: isDark),
               const SizedBox(height: 12),
-              _buildFuturisticSliderChips(),
+              _buildCategoryChips(surface: surface, border: border),
               const SizedBox(height: 16),
               Expanded(
                 child: filteredNeeds.isEmpty
-                    ? _buildCyberpunkEmptyState()
+                    ? _buildEmptyState(
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        surface: surface,
+                        border: border)
                     : ListView.separated(
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
@@ -71,7 +95,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         separatorBuilder: (_, __) => const SizedBox(height: 24),
                         itemBuilder: (context, index) {
                           final need = filteredNeeds[index];
-                          return _build3DMarketplaceItem(need);
+                          return _buildNeedCard(need, surface, border,
+                              textPrimary, textSecondary, textTertiary);
                         },
                       ),
               ),
@@ -82,10 +107,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCyberpunkHeader() {
+  Widget _buildHeader({required Color textPrimary}) {
     final user = FirebaseAuth.instance.currentUser;
     String currentUserName = 'User Core';
-
     if (user != null) {
       if (user.displayName != null && user.displayName!.isNotEmpty) {
         currentUserName = user.displayName!;
@@ -112,8 +136,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 4),
               Text(
                 currentUserName,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: textPrimary,
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
@@ -122,61 +146,74 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const Spacer(),
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10, width: 1),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.blur_on_rounded,
-                  color: AppColors.primaryLight, size: 24),
-              onPressed: () {},
-            ),
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, _) {
+              final bool isDark = themeProvider.isDarkMode;
+              return Container(
+                height: 48,
+                width: 48,
+                decoration: BoxDecoration(
+                  color:
+                      isDark ? AppColors.surfaceMuted : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: isDark ? Colors.white10 : const Color(0xFFCBD5E1),
+                      width: 1),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.blur_on_rounded,
+                      color: AppColors.primaryLight, size: 24),
+                  onPressed: () {},
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  /// 🥽 Futuristic Glassmorphic 3D Search Field Widget with Isometric Shadow Depth
-  Widget _build3DSearchBar() {
+  Widget _buildSearchBar({
+    required Color surface,
+    required Color border,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color textTertiary,
+    required bool isDark,
+  }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surface,
         borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1.2),
-        boxShadow: const [
+        border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.05)
+                : const Color(0xFFE2E8F0),
+            width: 1.2),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black45,
+            color: isDark ? Colors.black45 : Colors.black12,
             blurRadius: 12,
-            offset: Offset(-4, 6),
+            offset: const Offset(-4, 6),
           ),
         ],
       ),
       child: TextField(
         controller: _searchController,
-        style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w600),
+        style: TextStyle(
+            color: textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
         cursorColor: AppColors.primaryLight,
         decoration: InputDecoration(
           hintText: 'Search needs by keyword, type, title...',
-          hintStyle: const TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500),
+          hintStyle: TextStyle(
+              color: textTertiary, fontSize: 14, fontWeight: FontWeight.w500),
           prefixIcon: const Icon(Icons.search_rounded,
               color: AppColors.primaryLight, size: 22),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppColors.textSecondary, size: 18),
+                  icon:
+                      Icon(Icons.close_rounded, color: textSecondary, size: 18),
                   onPressed: () {
                     setState(() {
                       _searchController.clear();
@@ -184,22 +221,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                   },
                 )
-              : const Icon(Icons.tune_rounded,
-                  color: AppColors.textTertiary, size: 18),
+              : Icon(Icons.tune_rounded, color: textTertiary, size: 18),
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         ),
-        onChanged: (value) {
-          setState(() {
-            _searchQuery = value;
-          });
-        },
+        onChanged: (value) => setState(() => _searchQuery = value),
       ),
     );
   }
 
-  Widget _buildFuturisticSliderChips() {
+  Widget _buildCategoryChips({required Color surface, required Color border}) {
     final categories = ['All', ...MockData.categories];
     return SizedBox(
       height: 44,
@@ -216,9 +248,9 @@ class _HomeScreenState extends State<HomeScreen> {
               label: Text(cat),
               selected: isSelected,
               selectedColor: AppColors.primary,
-              backgroundColor: AppColors.surface,
+              backgroundColor: surface,
               side: BorderSide(
-                color: isSelected ? AppColors.primaryLight : AppColors.border,
+                color: isSelected ? AppColors.primaryLight : border,
                 width: 1.2,
               ),
               labelStyle: TextStyle(
@@ -238,7 +270,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _build3DMarketplaceItem(Need need) {
+  Widget _buildNeedCard(Need need, Color surface, Color border,
+      Color textPrimary, Color textSecondary, Color textTertiary) {
     return ThreeDGlassCard(
       glowColor: need.urgency.color,
       onTap: () => widget.onOpenDetail(need),
@@ -260,8 +293,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 6),
                   Text(
                     need.timeElapsed,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary,
+                    style: TextStyle(
+                        color: textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.bold),
                   ),
@@ -272,10 +305,10 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           Text(
             need.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
+              color: textPrimary,
               letterSpacing: -0.3,
             ),
           ),
@@ -284,21 +317,20 @@ class _HomeScreenState extends State<HomeScreen> {
             need.description,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                color: AppColors.textSecondary, height: 1.5, fontSize: 14),
+            style: TextStyle(color: textSecondary, height: 1.5, fontSize: 14),
           ),
           const SizedBox(height: 18),
-          Container(height: 1.2, color: AppColors.border),
+          Container(height: 1.2, color: border),
           const SizedBox(height: 16),
           Row(
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'VALUATION METRIC',
                     style: TextStyle(
-                      color: AppColors.textTertiary,
+                      color: textTertiary,
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1,
@@ -349,7 +381,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCyberpunkEmptyState() {
+  Widget _buildEmptyState({
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color surface,
+    required Color border,
+  }) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -357,26 +394,26 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: surface,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: border),
             ),
             child: const Icon(Icons.filter_hdr_outlined,
                 size: 44, color: AppColors.textTertiary),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'NO MATCHES FOUND',
             style: TextStyle(
-                color: AppColors.textPrimary,
+                color: textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Try refining your active search string.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            style: TextStyle(color: textSecondary, fontSize: 13),
           ),
         ],
       ),

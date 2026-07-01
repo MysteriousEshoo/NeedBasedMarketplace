@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:provider/provider.dart';
 
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
+import '../providers/theme_provider.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
 import 'post_need_screen.dart';
@@ -20,39 +22,29 @@ class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
   int _postSignal = 0;
 
-  /// 🕒 PROFESSIONAL HELPER: Converts Firebase Timestamp to Dynamic "Time Ago" or Date
   String _convertToTimeAgo(dynamic timestamp) {
     if (timestamp == null) return 'Just now';
-
     try {
       int millis = 0;
       if (timestamp is int) {
         millis = timestamp;
       } else if (timestamp is Map && timestamp['.sv'] != null) {
-        return 'Just now'; // Handling local optimistic updates
+        return 'Just now';
       } else {
         return 'Just now';
       }
-
       final postDate = DateTime.fromMillisecondsSinceEpoch(millis);
       final currentDate = DateTime.now();
       final difference = currentDate.difference(postDate);
-
-      if (difference.inSeconds < 60) {
-        return 'Just now';
-      } else if (difference.inMinutes < 60) {
-        return '${difference.inMinutes} mins ago';
-      } else if (difference.inHours < 24) {
-        return '${difference.inHours} hours ago';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays} days ago';
-      } else if (difference.inDays < 30) {
+      if (difference.inSeconds < 60) return 'Just now';
+      if (difference.inMinutes < 60) return '${difference.inMinutes} mins ago';
+      if (difference.inHours < 24) return '${difference.inHours} hours ago';
+      if (difference.inDays < 7) return '${difference.inDays} days ago';
+      if (difference.inDays < 30) {
         int weeks = (difference.inDays / 7).floor();
         return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
-      } else {
-        // Week se zyada ya month guzarne par standard date format render hoga
-        return '${postDate.day}/${postDate.month}/${postDate.year}';
       }
+      return '${postDate.day}/${postDate.month}/${postDate.year}';
     } catch (e) {
       return 'Just now';
     }
@@ -92,35 +84,27 @@ class _MainShellState extends State<MainShell> {
           if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
             final Map<dynamic, dynamic> allMap =
                 snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
-
             allMap.forEach((key, value) {
               final data = Map<String, dynamic>.from(value as Map);
-
               Urgency dynamicUrgency = Urgency.medium;
               if (data['urgency'] == 'high') {
                 dynamicUrgency = Urgency.high;
               } else if (data['urgency'] == 'low') {
                 dynamicUrgency = Urgency.low;
               }
-
-              // FIXED: timeElapsed mein ab static text nahi, balkay dynamic timestamp pass ho raha hai!
               final dynamicTimeText = _convertToTimeAgo(data['timestamp']);
-
-              liveNeeds.add(
-                Need(
-                  id: key,
-                  title: data['title'] ?? 'Untitled',
-                  description: data['description'] ?? '',
-                  category: data['category'] ?? 'General',
-                  budget: data['budget'] ?? 0,
-                  timeElapsed: dynamicTimeText,
-                  urgency: dynamicUrgency,
-                  authorName: data['authorName'] ?? 'Anonymous',
-                  offers: data['offers'] ?? 0,
-                ),
-              );
+              liveNeeds.add(Need(
+                id: key,
+                title: data['title'] ?? 'Untitled',
+                description: data['description'] ?? '',
+                category: data['category'] ?? 'General',
+                budget: data['budget'] ?? 0,
+                timeElapsed: dynamicTimeText,
+                urgency: dynamicUrgency,
+                authorName: data['authorName'] ?? 'Anonymous',
+                offers: data['offers'] ?? 0,
+              ));
             });
-
             liveNeeds = liveNeeds.reversed.toList();
           }
 
@@ -156,7 +140,7 @@ class _MainShellState extends State<MainShell> {
 }
 
 // ----------------------------------------------------------------------------
-// PROFESSIONAL SUB-WIDGET: Saved Needs Live View (Inline Optimized)
+// Saved Needs Tab
 // ----------------------------------------------------------------------------
 class _SavedNeedsTab extends StatelessWidget {
   final void Function(Need need) onOpenDetail;
@@ -168,7 +152,6 @@ class _SavedNeedsTab extends StatelessWidget {
       if (timestamp is! int) return 'Just now';
       final postDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
       final difference = DateTime.now().difference(postDate);
-
       if (difference.inSeconds < 60) return 'Just now';
       if (difference.inMinutes < 60) return '${difference.inMinutes} mins ago';
       if (difference.inHours < 24) return '${difference.inHours} hours ago';
@@ -183,14 +166,28 @@ class _SavedNeedsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Theme-aware
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDark = themeProvider.isDarkMode;
+    final Color bg = isDark ? AppColors.background : const Color(0xFFF1F5F9);
+    final Color surface = isDark ? AppColors.surface : Colors.white;
+    final Color border = isDark ? AppColors.border : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
+    final Color textSecondary =
+        isDark ? AppColors.textSecondary : const Color(0xFF475569);
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Center(child: Text('Please login to view saved needs'));
     }
 
     return Scaffold(
+      backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Saved Needs'),
+        backgroundColor: surface,
+        title: Text('Saved Needs', style: TextStyle(color: textPrimary)),
+        iconTheme: IconThemeData(color: textPrimary),
         centerTitle: true,
       ),
       body: StreamBuilder(
@@ -203,7 +200,6 @@ class _SavedNeedsTab extends StatelessWidget {
           if (savedSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (!savedSnapshot.hasData ||
               savedSnapshot.data!.snapshot.value == null) {
             return const _PlaceholderTab(
@@ -227,36 +223,28 @@ class _SavedNeedsTab extends StatelessWidget {
               }
 
               List<Need> bookmarkedNeeds = [];
-
               if (needsSnapshot.hasData &&
                   needsSnapshot.data!.snapshot.value != null) {
                 final Map<dynamic, dynamic> allMap =
                     needsSnapshot.data!.snapshot.value as Map<dynamic, dynamic>;
-
                 allMap.forEach((key, value) {
                   if (savedIds.contains(key)) {
                     final data = Map<String, dynamic>.from(value as Map);
-
                     Urgency dynamicUrgency = Urgency.medium;
-                    if (data['urgency'] == 'high') {
+                    if (data['urgency'] == 'high')
                       dynamicUrgency = Urgency.high;
-                    } else if (data['urgency'] == 'low') {
-                      dynamicUrgency = Urgency.low;
-                    }
-
-                    bookmarkedNeeds.add(
-                      Need(
-                        id: key,
-                        title: data['title'] ?? '',
-                        description: data['description'] ?? '',
-                        category: data['category'] ?? '',
-                        budget: data['budget'] ?? 0,
-                        timeElapsed: _convertToTimeAgo(data['timestamp']),
-                        urgency: dynamicUrgency,
-                        authorName: data['authorName'] ?? 'Anonymous',
-                        offers: data['offers'] ?? 0,
-                      ),
-                    );
+                    if (data['urgency'] == 'low') dynamicUrgency = Urgency.low;
+                    bookmarkedNeeds.add(Need(
+                      id: key,
+                      title: data['title'] ?? '',
+                      description: data['description'] ?? '',
+                      category: data['category'] ?? '',
+                      budget: data['budget'] ?? 0,
+                      timeElapsed: _convertToTimeAgo(data['timestamp']),
+                      urgency: dynamicUrgency,
+                      authorName: data['authorName'] ?? 'Anonymous',
+                      offers: data['offers'] ?? 0,
+                    ));
                   }
                 });
               }
@@ -296,19 +284,28 @@ class HomeScreenCardViewPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Theme-aware
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDark = themeProvider.isDarkMode;
+    final Color surface = isDark ? AppColors.surface : Colors.white;
+    final Color border = isDark ? AppColors.border : const Color(0xFFE2E8F0);
+    final Color textPrimary =
+        isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: AppColors.surface,
+      color: surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: border),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
         onTap: () => onOpenDetail(need),
         title: Text(
           need.title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 16, color: textPrimary),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
@@ -327,21 +324,31 @@ class HomeScreenCardViewPlaceholder extends StatelessWidget {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Bottom Nav Bar — theme-aware
+// ----------------------------------------------------------------------------
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
-
   final int currentIndex;
   final ValueChanged<int> onTap;
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Theme-aware bottom nav
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final bool isDark = themeProvider.isDarkMode;
+    final Color navBg = isDark ? AppColors.surface : Colors.white;
+    final Color navBorder =
+        isDark ? AppColors.divider : const Color(0xFFE2E8F0);
+    final Color navShadow = isDark ? AppColors.shadow : Colors.black12;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.divider)),
+      decoration: BoxDecoration(
+        color: navBg,
+        border: Border(top: BorderSide(color: navBorder)),
         boxShadow: [
           BoxShadow(
-              color: AppColors.shadow, blurRadius: 20, offset: Offset(0, -4)),
+              color: navShadow, blurRadius: 20, offset: const Offset(0, -4)),
         ],
       ),
       child: SafeArea(
@@ -351,30 +358,26 @@ class _BottomNav extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _NavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                selected: currentIndex == 0,
-                onTap: () => onTap(0),
-              ),
+                  icon: Icons.home_rounded,
+                  label: 'Home',
+                  selected: currentIndex == 0,
+                  onTap: () => onTap(0)),
               _NavItem(
-                icon: Icons.bookmark_rounded,
-                label: 'Saved',
-                selected: currentIndex == 1,
-                onTap: () => onTap(1),
-              ),
+                  icon: Icons.bookmark_rounded,
+                  label: 'Saved',
+                  selected: currentIndex == 1,
+                  onTap: () => onTap(1)),
               const SizedBox(width: 64),
               _NavItem(
-                icon: Icons.chat_bubble_rounded,
-                label: 'Messages',
-                selected: currentIndex == 3,
-                onTap: () => onTap(3),
-              ),
+                  icon: Icons.chat_bubble_rounded,
+                  label: 'Messages',
+                  selected: currentIndex == 3,
+                  onTap: () => onTap(3)),
               _NavItem(
-                icon: Icons.person_rounded,
-                label: 'Profile',
-                selected: currentIndex == 4,
-                onTap: () => onTap(4),
-              ),
+                  icon: Icons.person_rounded,
+                  label: 'Profile',
+                  selected: currentIndex == 4,
+                  onTap: () => onTap(4)),
             ],
           ),
         ),
@@ -390,7 +393,6 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
   });
-
   final IconData icon;
   final String label;
   final bool selected;
@@ -427,13 +429,15 @@ class _NavItem extends StatelessWidget {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Placeholder Tab
+// ----------------------------------------------------------------------------
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab({
     required this.icon,
     required this.title,
     required this.message,
   });
-
   final IconData icon;
   final String title;
   final String message;
@@ -475,6 +479,9 @@ class _PlaceholderTab extends StatelessWidget {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Glowing FAB
+// ----------------------------------------------------------------------------
 class _GlowingFab extends StatefulWidget {
   const _GlowingFab({required this.onPressed});
   final VoidCallback onPressed;
