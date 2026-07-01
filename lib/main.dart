@@ -5,7 +5,7 @@ import 'screens/auth_screen.dart';
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
-import 'providers/payment_provider.dart'; // ✅ ADD THIS
+import 'providers/payment_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -53,16 +53,19 @@ class NeedMarketplaceApp extends StatelessWidget {
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
+          // 1️⃣ Jab tak Firebase data check kar raha hai, loader dikhao
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
+          // 2️⃣ Agar user logged in hai (chahe Email se ya Google se), direct main interface par le jao
           if (snapshot.hasData) {
             return const MainShell();
           }
 
+          // 3️⃣ 🎉 AGAR USER LOGGED IN NAHI HAI, TOH FORAN AUTH SCREEN DIKHAO
           return const AuthScreen();
         },
       ),

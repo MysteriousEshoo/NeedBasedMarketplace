@@ -1,27 +1,64 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+enum Urgency { low, medium, high }
 
-/// Levels of urgency a need can carry, each mapped to its own
-/// label, foreground color and soft background tint.
-enum Urgency {
-  low('Low Urgency', AppColors.urgentLow, AppColors.urgentLowSoft),
-  medium('Medium Urgency', AppColors.urgentMedium, AppColors.urgentMediumSoft),
-  high('High Urgency', AppColors.urgentHigh, AppColors.urgentHighSoft);
+extension UrgencyX on Urgency {
+  String get label {
+    switch (this) {
+      case Urgency.low:
+        return 'Relaxed';
+      case Urgency.medium:
+        return 'Standard';
+      case Urgency.high:
+        return 'Urgent';
+    }
+  }
 
-  const Urgency(this.label, this.color, this.softColor);
+  Color get color {
+    switch (this) {
+      case Urgency.low:
+        return Colors.blue;
+      case Urgency.medium:
+        return Colors.orange;
+      case Urgency.high:
+        return Colors.red;
+    }
+  }
 
-  final String label;
-  final Color color;
-  final Color softColor;
-
-  /// Short form used in compact selectors ("Low", "Medium", "High").
-  String get shortLabel => label.split(' ').first;
+  Color get softColor {
+    switch (this) {
+      case Urgency.low:
+        return Colors.blue.withOpacity(0.1);
+      case Urgency.medium:
+        return Colors.orange.withOpacity(0.1);
+      case Urgency.high:
+        return Colors.red.withOpacity(0.1);
+    }
+  }
 }
 
-/// A single marketplace "need" posted by a buyer.
 class Need {
-  const Need({
+  final String id;
+  final String title;
+  final String description;
+  final String category;
+  final num budget;
+  final String timeElapsed;
+  final Urgency urgency;
+  final String authorName;
+  final int offers;
+  final String? userId;
+  final String? userName;
+  final String? company;
+  final String? customCompanyName;
+  final String? condition; // 'New' | 'Used'
+  final String? paymentMethod; // 'Cash' | 'Online Deposit'
+  final DateTime? createdAt;
+  final Map<String, dynamic>? location;
+  num get formattedBudget => budget;
+
+  Need({
     required this.id,
     required this.title,
     required this.description,
@@ -31,117 +68,127 @@ class Need {
     required this.urgency,
     required this.authorName,
     required this.offers,
+    this.userId,
+    this.userName,
+    this.company,
+    this.customCompanyName,
+    this.condition,
+    this.paymentMethod,
+    this.createdAt,
+    this.location,
   });
 
-  final String id;
-  final String title;
-  final String description;
-  final String category;
-  final int budget;
-  final String timeElapsed;
-  final Urgency urgency;
-  final String authorName;
-  final int offers;
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'category': category,
+      'budget': budget,
+      'timeElapsed': timeElapsed,
+      'urgency': urgency.toString().split('.').last,
+      'authorName': authorName,
+      'offers': offers,
+      'userId': userId,
+      'userName': userName,
+      'company': company,
+      'customCompanyName': customCompanyName,
+      'condition': condition,
+      'paymentMethod': paymentMethod,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
+      'location': location,
+    };
+  }
 
-  /// Budget formatted with thousands separators and a PKR prefix.
-  String get formattedBudget {
-    final raw = budget.toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < raw.length; i++) {
-      if (i > 0 && (raw.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(raw[i]);
-    }
-    return 'PKR $buffer';
+  factory Need.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Need(
+      id: data['id'] ?? doc.id,
+      title: data['title'] ?? 'Untitled',
+      description: data['description'] ?? '',
+      category: data['category'] ?? 'General',
+      budget: data['budget'] ?? 0,
+      timeElapsed: data['timeElapsed'] ?? 'N/A',
+      urgency: (data['urgency'] as String?) == 'high'
+          ? Urgency.high
+          : (data['urgency'] as String?) == 'low'
+              ? Urgency.low
+              : Urgency.medium,
+      authorName: data['authorName'] ?? 'Anonymous',
+      offers: data['offers'] ?? 0,
+      userId: data['userId'],
+      userName: data['userName'],
+      company: data['company'],
+      customCompanyName: data['customCompanyName'],
+      condition: data['condition'],
+      paymentMethod: data['paymentMethod'],
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
+      location: data['location'],
+    );
   }
 }
 
-/// Sample data used to drive the UI in this frontend-only build.
-class MockData {
-  MockData._();
+class NeedModel {
+  final String id;
+  final String userId;
+  final String userName;
+  final String category;
+  final String? company;
+  final String? customCompanyName;
+  final String condition;
+  final String paymentMethod;
+  final double budget;
+  final String description;
+  final DateTime createdAt;
 
-  static const List<String> categories = [
-    'Tech & Development',
-    'Local Services',
-    'Design & Creative',
-    'Delivery & Logistics',
-    'Home & Repair',
-    'Tutoring',
-  ];
+  NeedModel({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    required this.category,
+    this.company,
+    this.customCompanyName,
+    required this.condition,
+    required this.paymentMethod,
+    required this.budget,
+    required this.description,
+    required this.createdAt,
+  });
 
-  static const List<String> filterChips = [
-    'Trending',
-    'Tech',
-    'Local Services',
-    'Urgent',
-    'Design',
-    'Delivery',
-  ];
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'userId': userId,
+      'userName': userName,
+      'category': category,
+      'company': company,
+      'customCompanyName': customCompanyName,
+      'condition': condition,
+      'paymentMethod': paymentMethod,
+      'budget': budget,
+      'description': description,
+      'createdAt': Timestamp.fromDate(createdAt),
+    };
+  }
 
-  static const List<Need> needs = [
-    Need(
-      id: 'n1',
-      title: 'Flutter developer for food delivery MVP',
-      description:
-          'Looking for an experienced Flutter dev to build a 4-screen MVP '
-          'with live order tracking and Stripe payments. Designs are ready.',
-      category: 'Tech & Development',
-      budget: 85000,
-      timeElapsed: '12m ago',
-      urgency: Urgency.high,
-      authorName: 'Ayesha K.',
-      offers: 7,
-    ),
-    Need(
-      id: 'n2',
-      title: 'AC repair & gas refill in DHA Phase 5',
-      description:
-          'Two split units not cooling properly. Need a certified technician '
-          'today for inspection, gas refill and servicing.',
-      category: 'Home & Repair',
-      budget: 6500,
-      timeElapsed: '34m ago',
-      urgency: Urgency.medium,
-      authorName: 'Bilal R.',
-      offers: 3,
-    ),
-    Need(
-      id: 'n3',
-      title: 'Brand identity & logo for organic skincare',
-      description:
-          'Premium, minimalist brand kit: logo, color system, packaging '
-          'mockups and a one-page brand guideline.',
-      category: 'Design & Creative',
-      budget: 40000,
-      timeElapsed: '1h ago',
-      urgency: Urgency.low,
-      authorName: 'Hira S.',
-      offers: 11,
-    ),
-    Need(
-      id: 'n4',
-      title: 'Same-day documents delivery (Lahore → Islamabad)',
-      description:
-          'Sealed envelope pickup from Gulberg, drop at Blue Area before 6pm. '
-          'Rider with a clean record preferred.',
-      category: 'Delivery & Logistics',
-      budget: 4500,
-      timeElapsed: '2h ago',
-      urgency: Urgency.high,
-      authorName: 'Usman T.',
-      offers: 5,
-    ),
-    Need(
-      id: 'n5',
-      title: 'O-Level Maths tutor, 3 sessions a week',
-      description:
-          'Need a patient tutor for my son, focus on past papers and exam '
-          'technique. Evenings preferred, online is fine.',
-      category: 'Tutoring',
-      budget: 25000,
-      timeElapsed: '4h ago',
-      urgency: Urgency.medium,
-      authorName: 'Sana M.',
-      offers: 2,
-    ),
-  ];
+  factory NeedModel.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return NeedModel(
+      id: data['id'] ?? doc.id,
+      userId: data['userId'] ?? '',
+      userName: data['userName'] ?? 'Anonymous',
+      category: data['category'] ?? 'General',
+      company: data['company'],
+      customCompanyName: data['customCompanyName'],
+      condition: data['condition'] ?? 'New',
+      paymentMethod: data['paymentMethod'] ?? 'Cash',
+      budget: (data['budget'] ?? 0).toDouble(),
+      description: data['description'] ?? '',
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+    );
+  }
 }

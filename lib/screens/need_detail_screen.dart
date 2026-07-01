@@ -225,8 +225,9 @@ class NeedDetailScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
+              // ✅ Yeh line maine theek kar di hai, ab error gayab ho jayega
               Text(
-                need.formattedBudget,
+                'Rs. ${need.budget}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,

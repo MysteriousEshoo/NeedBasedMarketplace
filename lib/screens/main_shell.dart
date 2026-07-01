@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
-import '../models/need_model.dart';
+import '../models/need_model.dart' as legacy; // Using legacy Need model
 import '../theme/app_colors.dart';
 import '../providers/theme_provider.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
-import 'post_need_screen.dart';
+import 'post_need_flow_screen.dart'; // Direct access to structural need flow entry
+import 'seller_dashboard_feed.dart'; // Verified real-time sellers live view
 import 'profile_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -20,7 +22,35 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
-  int _postSignal = 0;
+  final int _postSignal = 0;
+  bool _isSellerModeActive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenToUserRoleSyncPipeline();
+  }
+
+  /// 🔄 Real-time User Role Sync Pipeline to switch streams without logouts
+  void _listenToUserRoleSyncPipeline() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data()!;
+        if (mounted) {
+          setState(() {
+            _isSellerModeActive = data['isSellerMode'] ?? false;
+          });
+        }
+      }
+    });
+  }
 
   String _convertToTimeAgo(dynamic timestamp) {
     if (timestamp == null) return 'Just now';
@@ -52,11 +82,11 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _openPostNeed() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PostNeedScreen()),
+      MaterialPageRoute(builder: (_) => const PostNeedFlowScreen()),
     );
   }
 
-  void _openDetail(Need need) {
+  void _openDetail(legacy.Need need) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => NeedDetailScreen(need: need)),
     );
@@ -79,21 +109,21 @@ class _MainShellState extends State<MainShell> {
       body: StreamBuilder(
         stream: FirebaseDatabase.instance.ref().child('needs').onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
-          List<Need> liveNeeds = [];
+          List<legacy.Need> liveNeeds = [];
 
           if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
             final Map<dynamic, dynamic> allMap =
                 snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
             allMap.forEach((key, value) {
               final data = Map<String, dynamic>.from(value as Map);
-              Urgency dynamicUrgency = Urgency.medium;
+              legacy.Urgency dynamicUrgency = legacy.Urgency.medium;
               if (data['urgency'] == 'high') {
-                dynamicUrgency = Urgency.high;
+                dynamicUrgency = legacy.Urgency.high;
               } else if (data['urgency'] == 'low') {
-                dynamicUrgency = Urgency.low;
+                dynamicUrgency = legacy.Urgency.low;
               }
               final dynamicTimeText = _convertToTimeAgo(data['timestamp']);
-              liveNeeds.add(Need(
+              liveNeeds.add(legacy.Need(
                 id: key,
                 title: data['title'] ?? 'Untitled',
                 description: data['description'] ?? '',
@@ -113,11 +143,13 @@ class _MainShellState extends State<MainShell> {
             children: [
               snapshot.connectionState == ConnectionState.waiting
                   ? const Center(child: CircularProgressIndicator())
-                  : HomeScreen(
-                      needs: liveNeeds,
-                      postSignal: _postSignal,
-                      onOpenDetail: _openDetail,
-                    ),
+                  : (_isSellerModeActive
+                      ? SellerDashboardFeed() // Render unified layout matrix to seller
+                      : HomeScreen(
+                          needs: liveNeeds,
+                          postSignal: _postSignal,
+                          onOpenDetail: _openDetail,
+                        )),
               _SavedNeedsTab(onOpenDetail: _openDetail),
               const SizedBox.shrink(),
               const _PlaceholderTab(
@@ -126,7 +158,7 @@ class _MainShellState extends State<MainShell> {
                 message:
                     'All your conversations with providers will live here.',
               ),
-              const ProfileScreen(),
+              const ProfileScreen(), // Explicit alignment to current layout class
             ],
           );
         },
@@ -143,7 +175,7 @@ class _MainShellState extends State<MainShell> {
 // Saved Needs Tab
 // ----------------------------------------------------------------------------
 class _SavedNeedsTab extends StatelessWidget {
-  final void Function(Need need) onOpenDetail;
+  final void Function(legacy.Need need) onOpenDetail;
   const _SavedNeedsTab({required this.onOpenDetail});
 
   String _convertToTimeAgo(dynamic timestamp) {
@@ -156,8 +188,9 @@ class _SavedNeedsTab extends StatelessWidget {
       if (difference.inMinutes < 60) return '${difference.inMinutes} mins ago';
       if (difference.inHours < 24) return '${difference.inHours} hours ago';
       if (difference.inDays < 7) return '${difference.inDays} days ago';
-      if (difference.inDays < 30)
+      if (difference.inDays < 30) {
         return '${(difference.inDays / 7).floor()} weeks ago';
+      }
       return '${postDate.day}/${postDate.month}/${postDate.year}';
     } catch (_) {
       return 'Just now';
@@ -166,16 +199,12 @@ class _SavedNeedsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Theme-aware
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bool isDark = themeProvider.isDarkMode;
     final Color bg = isDark ? AppColors.background : const Color(0xFFF1F5F9);
     final Color surface = isDark ? AppColors.surface : Colors.white;
-    final Color border = isDark ? AppColors.border : const Color(0xFFE2E8F0);
     final Color textPrimary =
         isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
-    final Color textSecondary =
-        isDark ? AppColors.textSecondary : const Color(0xFF475569);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -222,7 +251,7 @@ class _SavedNeedsTab extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              List<Need> bookmarkedNeeds = [];
+              List<legacy.Need> bookmarkedNeeds = [];
               if (needsSnapshot.hasData &&
                   needsSnapshot.data!.snapshot.value != null) {
                 final Map<dynamic, dynamic> allMap =
@@ -230,11 +259,12 @@ class _SavedNeedsTab extends StatelessWidget {
                 allMap.forEach((key, value) {
                   if (savedIds.contains(key)) {
                     final data = Map<String, dynamic>.from(value as Map);
-                    Urgency dynamicUrgency = Urgency.medium;
+                    legacy.Urgency dynamicUrgency = legacy.Urgency.medium;
                     if (data['urgency'] == 'high')
-                      dynamicUrgency = Urgency.high;
-                    if (data['urgency'] == 'low') dynamicUrgency = Urgency.low;
-                    bookmarkedNeeds.add(Need(
+                      dynamicUrgency = legacy.Urgency.high;
+                    if (data['urgency'] == 'low')
+                      dynamicUrgency = legacy.Urgency.low;
+                    bookmarkedNeeds.add(legacy.Need(
                       id: key,
                       title: data['title'] ?? '',
                       description: data['description'] ?? '',
@@ -277,14 +307,13 @@ class _SavedNeedsTab extends StatelessWidget {
 }
 
 class HomeScreenCardViewPlaceholder extends StatelessWidget {
-  final Need need;
-  final void Function(Need need) onOpenDetail;
+  final legacy.Need need;
+  final void Function(legacy.Need need) onOpenDetail;
   const HomeScreenCardViewPlaceholder(
       {super.key, required this.need, required this.onOpenDetail});
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Theme-aware
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bool isDark = themeProvider.isDarkMode;
     final Color surface = isDark ? AppColors.surface : Colors.white;
@@ -334,7 +363,6 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Theme-aware bottom nav
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bool isDark = themeProvider.isDarkMode;
     final Color navBg = isDark ? AppColors.surface : Colors.white;
@@ -387,12 +415,11 @@ class _BottomNav extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _NavItem(
+      {required this.icon,
+      required this.label,
+      required this.selected,
+      required this.onTap});
   final IconData icon;
   final String label;
   final bool selected;
@@ -433,11 +460,8 @@ class _NavItem extends StatelessWidget {
 // Placeholder Tab
 // ----------------------------------------------------------------------------
 class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
+  const _PlaceholderTab(
+      {required this.icon, required this.title, required this.message});
   final IconData icon;
   final String title;
   final String message;
@@ -482,15 +506,28 @@ class _PlaceholderTab extends StatelessWidget {
 // ----------------------------------------------------------------------------
 // Glowing FAB
 // ----------------------------------------------------------------------------
-class _GlowingFab extends StatefulWidget {
+// ----------------------------------------------------------------------------
+// Glowing FAB — Clean & Correct Architectural Implementation
+// ----------------------------------------------------------------------------
+class _GlowingFab extends StatelessWidget {
   const _GlowingFab({required this.onPressed});
   final VoidCallback onPressed;
 
   @override
-  State<_GlowingFab> createState() => _GlowingFabState();
+  Widget build(BuildContext context) {
+    return _GlowingFabContent(onPressed: onPressed);
+  }
 }
 
-class _GlowingFabState extends State<_GlowingFab>
+class _GlowingFabContent extends StatefulWidget {
+  const _GlowingFabContent({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  State<_GlowingFabContent> createState() => _GlowingFabState();
+}
+
+class _GlowingFabState extends State<_GlowingFabContent>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 

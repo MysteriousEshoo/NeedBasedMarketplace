@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
-import 'main_shell.dart';
-import '../theme/app_colors.dart';
-import '../widgets/primary_loading_button.dart';
-import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/app_colors.dart';
+import 'main_shell.dart';
 
-/// Screen 1 — Premium dual authentication interface.
-///
-/// A single screen hosts both Login and Sign Up via an animated segmented
-/// tab control. Inputs use floating labels, leading icons and live
-/// validation styling. Google Sign-In is fully wired to Firebase Auth.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -18,517 +12,260 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
-
-  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+  final _nameController = TextEditingController();
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
-  bool _isSubmitting = false;
-  bool _isGoogleSubmitting = false;
-
-  bool get _isLogin => _tabController.index == 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-
-    // Tab change hone par state ko refresh karne ke liye listener
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
-  }
+  bool _isSignupMode = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
-  void _goToMainShell() {
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, animation, __) => const MainShell(),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.04),
-              end: Offset.zero,
-            ).animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
+  /// 🔐 EMAIL/PASSWORD CORE SYSTEM
+  void _processEmailAuthentication() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() => _isSubmitting = true);
 
+    setState(() => _isLoading = true);
     try {
-      if (_isLogin) {
-        // Asli Firebase Login Logic
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-      } else {
-        // Asli Firebase Sign Up (Register) Logic
-        final credential =
-            await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final auth = FirebaseAuth.instance;
+      final firestore = FirebaseFirestore.instance;
+
+      if (_isSignupMode) {
+        UserCredential credential = await auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
-        // Naam ko Firebase profile mein save karo
-        final name = _nameController.text.trim();
-        if (name.isNotEmpty) {
-          await credential.user?.updateDisplayName(name);
-          await credential.user?.reload();
-        }
+        await credential.user?.updateDisplayName(_nameController.text.trim());
+        await credential.user?.reload();
+
+        await firestore.collection('users').doc(credential.user?.uid).set({
+          'uid': credential.user?.uid,
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'isSellerMode': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await auth.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
       }
 
       if (!mounted) return;
-      setState(() => _isSubmitting = false);
-      _goToMainShell();
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-
-      // Agar koi error aaye (jaise wrong password ya email already in use), to alert dikhao
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message ?? 'An error occurred. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _navigateToApplicationShell();
+    } catch (e) {
+      _displayFeedbackMessage('⚠️ Authentication Error: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isGoogleSubmitting = true);
-
+  /// 🌐 GOOGLE AUTH AUTOMATED PIPELINE
+  void _processGoogleSignPipeline() async {
+    setState(() => _isLoading = true);
     try {
-      // google_sign_in v7+ singleton instance
-      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+      final GoogleSignIn googleSignIn = GoogleSignIn(scopes: ['email']);
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
-      // Plugin ko initialize karo (sirf ek baar chalta hai, dobara call karna safe hai)
-      // serverClientId Android ke liye zaroori hai — Firebase Web OAuth Client ID
-      await googleSignIn.initialize(
-        serverClientId:
-            '976134004608-hg1l8vbi7r5bc6d48qqa42gne6uvnv1p.apps.googleusercontent.com',
-      );
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
 
-      // User ko Google account picker dikhao
-      final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      User? user = userCredential.user;
 
-      if (!mounted) return;
-      setState(() => _isGoogleSubmitting = false);
-      _goToMainShell();
-    } on GoogleSignInException catch (e) {
-      if (!mounted) return;
-      setState(() => _isGoogleSubmitting = false);
+      if (user != null) {
+        final firestore = FirebaseFirestore.instance;
+        final userDoc = await firestore.collection('users').doc(user.uid).get();
 
-      // User ne cancel kiya to chup chap wapis chale jao, error mat dikhao
-      if (e.code == GoogleSignInExceptionCode.canceled) return;
+        if (!userDoc.exists) {
+          await firestore.collection('users').doc(user.uid).set({
+            'uid': user.uid,
+            'name': user.displayName ?? 'Google Account User',
+            'email': user.email,
+            'isSellerMode': false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text(e.description ?? 'Google sign-in failed. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() => _isGoogleSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text(e.message ?? 'Google sign-in failed. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+        if (!mounted) return;
+        _navigateToApplicationShell();
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isGoogleSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google sign-in failed. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _displayFeedbackMessage(
+          '⚠️ Google Authentication failure: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  void _navigateToApplicationShell() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainShell()),
+    );
+  }
+
+  void _displayFeedbackMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.urgentHigh),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color currentTextPrimary =
+        isDark ? AppColors.textPrimary : Colors.black87;
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildBrandMark(),
-              const SizedBox(height: 36),
-              Text(
-                _isLogin ? 'Welcome back' : 'Create your account',
-                style: textTheme.displaySmall?.copyWith(fontSize: 30),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _isLogin
-                    ? 'Sign in to pick up where you left off.'
-                    : 'Join thousands posting and fulfilling needs daily.',
-                style: textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 28),
-              _buildSegmentedTabs(),
-              const SizedBox(height: 28),
-              _buildForm(),
-              const SizedBox(height: 24),
-              PrimaryLoadingButton(
-                label: _isLogin ? 'Sign In' : 'Create Account',
-                isLoading: _isSubmitting,
-                onPressed: _submit,
-              ),
-              const SizedBox(height: 28),
-              _buildDivider(),
-              const SizedBox(height: 24),
-              _buildSocialButtons(),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // Sections
-  // --------------------------------------------------------------------------
-
-  Widget _buildBrandMark() {
-    return Row(
-      children: [
-        Container(
-          height: 52,
-          width: 52,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.primaryLight],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: AppColors.glow,
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          'NeedHub',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSegmentedTabs() {
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        dividerColor: Colors.transparent,
-        indicatorSize: TabBarIndicatorSize.tab,
-        indicator: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.shadow,
-              blurRadius: 10,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        labelColor: AppColors.primary,
-        unselectedLabelColor: AppColors.textSecondary,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-        unselectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-        tabs: const [
-          Tab(text: 'Login'),
-          Tab(text: 'Sign Up'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForm() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          // Name field only appears in Sign Up mode, with a smooth reveal.
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: _isLogin
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _PremiumField(
-                      controller: _nameController,
-                      label: 'Full name',
-                      icon: Icons.person_outline_rounded,
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Please enter your name'
-                          : null,
-                    ),
-                  ),
-          ),
-          _PremiumField(
-            controller: _emailController,
-            label: 'Email address',
-            icon: Icons.mail_outline_rounded,
-            keyboardType: TextInputType.emailAddress,
-            validator: (v) {
-              if (v == null || v.isEmpty) return 'Please enter your email';
-              final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+').hasMatch(v);
-              return ok ? null : 'Enter a valid email address';
-            },
-          ),
-          const SizedBox(height: 16),
-          _PremiumField(
-            controller: _passwordController,
-            label: 'Password',
-            icon: Icons.lock_outline_rounded,
-            obscureText: _obscurePassword,
-            validator: (v) => (v == null || v.length < 6)
-                ? 'Password must be at least 6 characters'
-                : null,
-            suffix: IconButton(
-              splashRadius: 20,
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: AppColors.textSecondary,
-              ),
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
-            ),
-          ),
-          // Confirm Password field only appears in Sign Up mode.
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: _isLogin
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: _PremiumField(
-                      controller: _confirmPasswordController,
-                      label: 'Confirm password',
-                      icon: Icons.lock_outline_rounded,
-                      obscureText: _obscureConfirmPassword,
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Please confirm your password';
-                        }
-                        if (v != _passwordController.text) {
-                          return 'Passwords do not match';
-                        }
-                        return null;
-                      },
-                      suffix: IconButton(
-                        splashRadius: 20,
-                        icon: Icon(
-                          _obscureConfirmPassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          color: AppColors.textSecondary,
-                        ),
-                        onPressed: () => setState(() =>
-                            _obscureConfirmPassword = !_obscureConfirmPassword),
+      backgroundColor: isDark ? AppColors.background : const Color(0xFFF1F5F9),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryLight))
+          : Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(28),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _isSignupMode ? 'Create Account' : 'Welcome Back',
+                        style: TextStyle(
+                            color: currentTextPrimary,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900),
                       ),
-                    ),
-                  ),
-          ),
-          if (_isLogin)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {},
-                child: const Text(
-                  'Forgot password?',
-                  style: TextStyle(
-                    color: AppColors.accent,
-                    fontWeight: FontWeight.w600,
+                      const SizedBox(height: 32),
+
+                      if (_isSignupMode) ...[
+                        TextFormField(
+                          controller: _nameController,
+                          style: TextStyle(color: currentTextPrimary),
+                          decoration: const InputDecoration(
+                              labelText: 'Full Name',
+                              prefixIcon: Icon(Icons.person_rounded)),
+                          validator: (v) => (v == null || v.isEmpty)
+                              ? 'Please enter your name'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(color: currentTextPrimary),
+                        decoration: const InputDecoration(
+                            labelText: 'Email Address',
+                            prefixIcon: Icon(Icons.email_rounded)),
+                        validator: (v) => (v == null || !v.contains('@'))
+                            ? 'Please enter a valid email'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        style: TextStyle(color: currentTextPrimary),
+                        decoration: const InputDecoration(
+                            labelText: 'Security Password',
+                            prefixIcon: Icon(Icons.lock_rounded)),
+                        validator: (v) => (v == null || v.length < 6)
+                            ? 'Password must be at least 6 characters'
+                            : null,
+                      ),
+                      const SizedBox(height: 32),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16))),
+                          onPressed: _processEmailAuthentication,
+                          child: Text(
+                            _isSignupMode ? 'SIGN UP' : 'LOGIN',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ✅ FIXED: Google Icon
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            side:
+                                const BorderSide(color: AppColors.primaryLight),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: _processGoogleSignPipeline,
+                          icon: const Icon(
+                            Icons.g_mobiledata, // ✅ FIXED: Removed _rounded
+                            size: 32,
+                            color: AppColors.primaryLight,
+                          ),
+                          label: Text(
+                            _isSignupMode
+                                ? 'Signup with Google'
+                                : 'Login with Google',
+                            style: TextStyle(
+                                color: currentTextPrimary,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      TextButton(
+                        onPressed: () =>
+                            setState(() => _isSignupMode = !_isSignupMode),
+                        child: Text(
+                          _isSignupMode
+                              ? 'Already have an account? Login here'
+                              : "Don't have an account? Sign up here",
+                          style: const TextStyle(
+                              color: AppColors.primaryLight,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: AppColors.border)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Text(
-            'or continue with',
-            style: TextStyle(
-              color: AppColors.textTertiary,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: AppColors.border)),
-      ],
-    );
-  }
-
-  Widget _buildSocialButtons() {
-    return Column(
-      children: [
-        OutlinedButton.icon(
-          onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
-          icon: _isGoogleSubmitting
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primary,
-                  ),
-                )
-              : const _GoogleGlyph(),
-          label: Text(
-              _isGoogleSubmitting ? 'Signing in...' : 'Sign in with Google'),
-        ),
-        const SizedBox(height: 14),
-        OutlinedButton.icon(
-          onPressed: () {},
-          icon:
-              const Icon(Icons.phone_iphone_rounded, color: AppColors.primary),
-          label: const Text('Continue with phone number'),
-        ),
-      ],
-    );
-  }
-}
-
-// ----------------------------------------------------------------------------
-// Private helpers
-// ----------------------------------------------------------------------------
-
-/// A styled text field with a floating label, leading icon and live
-/// validation borders, used across the auth form.
-class _PremiumField extends StatelessWidget {
-  const _PremiumField({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    this.validator,
-    this.keyboardType,
-    this.obscureText = false,
-    this.suffix,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  final String? Function(String?)? validator;
-  final TextInputType? keyboardType;
-  final bool obscureText;
-  final Widget? suffix;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
-      style: const TextStyle(
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.textSecondary),
-        suffixIcon: suffix,
-      ),
-    );
-  }
-}
-
-/// A small multi-color "G" mark so the Google button feels authentic
-/// without bundling external image assets.
-class _GoogleGlyph extends StatelessWidget {
-  const _GoogleGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'G',
-      style: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w800,
-        color: Color(0xFF4285F4),
-      ),
     );
   }
 }
