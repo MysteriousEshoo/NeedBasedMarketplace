@@ -54,7 +54,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final Color textTertiary =
         isDark ? AppColors.textTertiary : const Color(0xFF94A3B8);
 
-    // ✅ Get current user for name display
     final user = FirebaseAuth.instance.currentUser;
     String userName = 'User';
     if (user != null) {
@@ -65,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
+    // ✅ Filter needs
     final filteredNeeds = widget.needs.where((need) {
       final matchesCategory =
           _selectedCategory == 'All' || need.category == _selectedCategory;
@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ============================================================
-            // ✅ FIX 1: HEADER - USER NAME DISPLAY
+            // ✅ HEADER - USER NAME
             // ============================================================
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -101,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    userName, // ✅ USER NAME SHOW HOGA!
+                    userName,
                     style: TextStyle(
                       color: textPrimary,
                       fontSize: 24,
@@ -113,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             // ============================================================
-            // ✅ FIX 2: SEARCH BAR - BORDER FIXED
+            // ✅ SEARCH BAR - FIXED BORDER
             // ============================================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -160,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                           )
                         : null,
-                    // ✅ FIX: No duplicate border
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
@@ -174,7 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Category Chips
+            // ============================================================
+            // ✅ CATEGORY CHIPS
+            // ============================================================
             const SizedBox(height: 12),
             SizedBox(
               height: 44,
@@ -211,7 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            // Need List
+            // ============================================================
+            // ✅ NEED LIST
+            // ============================================================
             Expanded(
               child: filteredNeeds.isEmpty
                   ? Center(
@@ -248,14 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemBuilder: (context, index) {
                         final need = filteredNeeds[index];
-                        return _buildModernNeedCard(
-                          need,
-                          surfaceColor,
-                          borderColor,
-                          textPrimary,
-                          textSecondary,
-                          textTertiary,
-                        );
+                        return _buildModernNeedCard(need);
                       },
                     ),
             ),
@@ -266,16 +262,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ============================================================
-  // ✅ MODERN NEED CARD WITH 3D GLASS EFFECT
+  // ✅ NEED CARD
   // ============================================================
-  Widget _buildModernNeedCard(
-    legacy.Need need,
-    Color surface,
-    Color border,
-    Color textPrimary,
-    Color textSecondary,
-    Color textTertiary,
-  ) {
+  Widget _buildModernNeedCard(legacy.Need need) {
     return ThreeDGlassCard(
       glowColor: need.urgency == legacy.Urgency.high
           ? AppColors.urgentHigh

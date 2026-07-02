@@ -1,5 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
+
+// ============================================================
+// ENUMS
+// ============================================================
 
 enum Urgency { low, medium, high }
 
@@ -7,9 +12,9 @@ extension UrgencyX on Urgency {
   String get label {
     switch (this) {
       case Urgency.low:
-        return 'Relaxed';
+        return 'Low';
       case Urgency.medium:
-        return 'Standard';
+        return 'Medium';
       case Urgency.high:
         return 'Urgent';
     }
@@ -18,25 +23,58 @@ extension UrgencyX on Urgency {
   Color get color {
     switch (this) {
       case Urgency.low:
-        return Colors.blue;
+        return AppColors.urgentLow;
       case Urgency.medium:
-        return Colors.orange;
+        return AppColors.urgentMedium;
       case Urgency.high:
-        return Colors.red;
+        return AppColors.urgentHigh;
     }
   }
 
   Color get softColor {
     switch (this) {
       case Urgency.low:
-        return Colors.blue.withOpacity(0.1);
+        return AppColors.urgentLowSoft;
       case Urgency.medium:
-        return Colors.orange.withOpacity(0.1);
+        return AppColors.urgentMediumSoft;
       case Urgency.high:
-        return Colors.red.withOpacity(0.1);
+        return AppColors.urgentHighSoft;
+    }
+  }
+
+  String get shortLabel {
+    switch (this) {
+      case Urgency.low:
+        return 'Low';
+      case Urgency.medium:
+        return 'Medium';
+      case Urgency.high:
+        return 'High';
     }
   }
 }
+
+// ✅ Product Condition Enum
+enum ProductCondition {
+  new_('New'),
+  used('Used');
+
+  const ProductCondition(this.label);
+  final String label;
+}
+
+// ✅ Payment Method Enum
+enum PaymentMethod {
+  cash('Cash'),
+  onlineDeposit('Online Deposit');
+
+  const PaymentMethod(this.label);
+  final String label;
+}
+
+// ============================================================
+// NEED MODEL (With Firestore Support)
+// ============================================================
 
 class Need {
   final String id;
@@ -56,7 +94,7 @@ class Need {
   final String? paymentMethod; // 'Cash' | 'Online Deposit'
   final DateTime? createdAt;
   final Map<String, dynamic>? location;
-  num get formattedBudget => budget;
+  final bool isPremium;
 
   Need({
     required this.id,
@@ -76,7 +114,10 @@ class Need {
     this.paymentMethod,
     this.createdAt,
     this.location,
+    this.isPremium = false,
   });
+
+  num get formattedBudget => budget;
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -97,6 +138,7 @@ class Need {
       'paymentMethod': paymentMethod,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
       'location': location,
+      'isPremium': isPremium,
     };
   }
 
@@ -126,9 +168,31 @@ class Need {
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
       location: data['location'],
+      isPremium: data['isPremium'] ?? false,
+    );
+  }
+
+  // ✅ Convert to NeedModel (for compatibility)
+  NeedModel toNeedModel() {
+    return NeedModel(
+      id: id,
+      userId: userId ?? '',
+      userName: userName ?? authorName,
+      category: category,
+      company: company,
+      customCompanyName: customCompanyName,
+      condition: condition ?? 'New',
+      paymentMethod: paymentMethod ?? 'Cash',
+      budget: budget.toDouble(),
+      description: description,
+      createdAt: createdAt ?? DateTime.now(),
     );
   }
 }
+
+// ============================================================
+// NEED MODEL (Simplified Version)
+// ============================================================
 
 class NeedModel {
   final String id;
@@ -191,4 +255,91 @@ class NeedModel {
           : DateTime.now(),
     );
   }
+
+  // ✅ Convert to Need (for compatibility)
+  Need toNeed() {
+    return Need(
+      id: id,
+      title: description.length > 30
+          ? '${description.substring(0, 30)}...'
+          : description,
+      description: description,
+      category: category,
+      budget: budget,
+      timeElapsed: _getTimeAgo(createdAt),
+      urgency: Urgency.medium,
+      authorName: userName,
+      offers: 0,
+      userId: userId,
+      userName: userName,
+      company: company,
+      customCompanyName: customCompanyName,
+      condition: condition,
+      paymentMethod: paymentMethod,
+      createdAt: createdAt,
+    );
+  }
+
+  String _getTimeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays > 7) return '${date.day}/${date.month}/${date.year}';
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+}
+
+// ============================================================
+// MOCK DATA
+// ============================================================
+
+class MockData {
+  MockData._();
+
+  static const List<String> categories = [
+    'Tech & Development',
+    'Mobile Phone',
+    'Local Services',
+    'Design & Creative',
+    'Delivery & Logistics',
+    'Home & Repair',
+    'Tutoring',
+    'Electronics',
+    'Vehicles',
+  ];
+
+  static const List<String> mobileCompanies = [
+    'Apple (iPhone)',
+    'Samsung',
+    'Infinix',
+    'Tecno',
+    'Oppo',
+    'Vivo',
+    'Redmi',
+    'Realme',
+    'Others',
+  ];
+
+  static const List<String> filterChips = [
+    'Trending',
+    'Tech',
+    'Local Services',
+    'Urgent',
+    'Design',
+    'Delivery',
+  ];
+
+  static const List<String> locations = [
+    'Karachi',
+    'Lahore',
+    'Islamabad',
+    'Rawalpindi',
+    'Faisalabad',
+    'Multan',
+    'Peshawar',
+    'Quetta',
+    'Hyderabad',
+    'Other',
+  ];
 }

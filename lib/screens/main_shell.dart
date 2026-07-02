@@ -4,13 +4,12 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
-import '../models/need_model.dart' as legacy; // Using legacy Need model
+import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
 import '../providers/theme_provider.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
-import 'post_need_flow_screen.dart'; // Direct access to structural need flow entry
-import 'seller_dashboard_feed.dart'; // Verified real-time sellers live view
+import 'post_need_screen.dart'; // ✅ Using PostNeedScreen
 import 'profile_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -22,7 +21,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
-  final int _postSignal = 0;
+  int _postSignal = 0; // ✅ Will increment on new post
   bool _isSellerModeActive = false;
 
   @override
@@ -31,7 +30,6 @@ class _MainShellState extends State<MainShell> {
     _listenToUserRoleSyncPipeline();
   }
 
-  /// 🔄 Real-time User Role Sync Pipeline to switch streams without logouts
   void _listenToUserRoleSyncPipeline() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -80,10 +78,15 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
+  // ✅ Post Need opens - after closing, increment signal
   Future<void> _openPostNeed() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PostNeedFlowScreen()),
+      MaterialPageRoute(builder: (_) => const PostNeedScreen()),
     );
+    // ✅ Refresh home screen after posting
+    setState(() {
+      _postSignal++;
+    });
   }
 
   void _openDetail(legacy.Need need) {
@@ -143,13 +146,11 @@ class _MainShellState extends State<MainShell> {
             children: [
               snapshot.connectionState == ConnectionState.waiting
                   ? const Center(child: CircularProgressIndicator())
-                  : (_isSellerModeActive
-                      ? SellerDashboardFeed() // Render unified layout matrix to seller
-                      : HomeScreen(
-                          needs: liveNeeds,
-                          postSignal: _postSignal,
-                          onOpenDetail: _openDetail,
-                        )),
+                  : HomeScreen(
+                      needs: liveNeeds,
+                      postSignal: _postSignal,
+                      onOpenDetail: _openDetail,
+                    ),
               _SavedNeedsTab(onOpenDetail: _openDetail),
               const SizedBox.shrink(),
               const _PlaceholderTab(
@@ -158,7 +159,7 @@ class _MainShellState extends State<MainShell> {
                 message:
                     'All your conversations with providers will live here.',
               ),
-              const ProfileScreen(), // Explicit alignment to current layout class
+              const ProfileScreen(),
             ],
           );
         },
@@ -354,7 +355,7 @@ class HomeScreenCardViewPlaceholder extends StatelessWidget {
 }
 
 // ----------------------------------------------------------------------------
-// Bottom Nav Bar — theme-aware
+// Bottom Nav Bar
 // ----------------------------------------------------------------------------
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
@@ -505,9 +506,6 @@ class _PlaceholderTab extends StatelessWidget {
 
 // ----------------------------------------------------------------------------
 // Glowing FAB
-// ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-// Glowing FAB — Clean & Correct Architectural Implementation
 // ----------------------------------------------------------------------------
 class _GlowingFab extends StatelessWidget {
   const _GlowingFab({required this.onPressed});
