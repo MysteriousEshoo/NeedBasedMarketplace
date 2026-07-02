@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import '../models/need_model.dart'
-    as legacy; // Ensure it points correctly to your model class structure
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
+import '../widgets/three_d_glass_card.dart';
+import '../widgets/pill_tag.dart';
 
 class HomeScreen extends StatefulWidget {
-  // ✅ Explicitly matched to match the precise legacy 'Need' array passing channel from MainShell
   final List<legacy.Need> needs;
   final int postSignal;
   final void Function(legacy.Need need) onOpenDetail;
@@ -25,7 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // ✅ Restored constant local category layout mapping to completely eliminate MockData errors
   final List<String> _localCategories = [
     'All',
     'Mobile Phone',
@@ -54,7 +54,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final Color textTertiary =
         isDark ? AppColors.textTertiary : const Color(0xFF94A3B8);
 
-    // 🔍 Real-time local filtering engine array execution nodes
+    // ✅ Get current user for name display
+    final user = FirebaseAuth.instance.currentUser;
+    String userName = 'User';
+    if (user != null) {
+      if (user.displayName != null && user.displayName!.isNotEmpty) {
+        userName = user.displayName!;
+      } else if (user.email != null) {
+        userName = user.email!.split('@').first;
+      }
+    }
+
     final filteredNeeds = widget.needs.where((need) {
       final matchesCategory =
           _selectedCategory == 'All' || need.category == _selectedCategory;
@@ -72,50 +82,99 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header display configurations
+            // ============================================================
+            // ✅ FIX 1: HEADER - USER NAME DISPLAY
+            // ============================================================
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('SYSTEM USER ACTIVE',
-                      style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1)),
+                  const Text(
+                    'WELCOME BACK',
+                    style: TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Marketplace Needs',
-                      style: TextStyle(
-                          color: textPrimary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900)),
+                  Text(
+                    userName, // ✅ USER NAME SHOW HOGA!
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            // Search input field pipeline layout
+            // ============================================================
+            // ✅ FIX 2: SEARCH BAR - BORDER FIXED
+            // ============================================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor)),
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
                 child: TextField(
                   controller: _searchController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: const InputDecoration(
-                      hintText: 'Search needs by keyword, type...',
-                      border: InputBorder.none,
-                      icon: Icon(Icons.search)),
+                  style: TextStyle(color: textPrimary, fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Search by keyword, category, or title...',
+                    hintStyle: TextStyle(
+                      color: textTertiary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: AppColors.primaryLight,
+                      size: 22,
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: textTertiary,
+                              size: 18,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    // ✅ FIX: No duplicate border
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 16,
+                    ),
+                  ),
                   onChanged: (val) => setState(() => _searchQuery = val),
                 ),
               ),
             ),
 
-            // Category Horizontal Scrollable Chips Row
+            // Category Chips
             const SizedBox(height: 12),
             SizedBox(
               height: 44,
@@ -133,9 +192,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       selected: isSelected,
                       selectedColor: AppColors.primary,
                       labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : textSecondary,
-                          fontWeight: FontWeight.bold),
+                        color: isSelected ? Colors.white : textSecondary,
+                        fontWeight: FontWeight.bold,
+                      ),
                       backgroundColor: surfaceColor,
+                      side: BorderSide(
+                        color: isSelected ? AppColors.primary : borderColor,
+                      ),
                       onSelected: (bool selected) {
                         setState(
                             () => _selectedCategory = selected ? cat : 'All');
@@ -148,19 +211,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            // Active Listing Data Core Stream View
+            // Need List
             Expanded(
               child: filteredNeeds.isEmpty
                   ? Center(
-                      child: Text('No active matching needs identified.',
-                          style: TextStyle(color: textSecondary)))
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off_rounded,
+                            size: 48,
+                            color: textTertiary,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No matching needs found',
+                            style: TextStyle(
+                              color: textSecondary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Try adjusting your search or filters',
+                            style: TextStyle(
+                              color: textTertiary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   : ListView.builder(
                       itemCount: filteredNeeds.length,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemBuilder: (context, index) {
                         final need = filteredNeeds[index];
-                        return _buildNeedCard(need, surfaceColor, borderColor,
-                            textPrimary, textSecondary, textTertiary);
+                        return _buildModernNeedCard(
+                          need,
+                          surfaceColor,
+                          borderColor,
+                          textPrimary,
+                          textSecondary,
+                          textTertiary,
+                        );
                       },
                     ),
             ),
@@ -170,81 +265,153 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNeedCard(legacy.Need need, Color surface, Color border,
-      Color textPrimary, Color textSecondary, Color textTertiary) {
-    return Card(
-      color: surface,
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: border)),
-      child: InkWell(
-        onTap: () => widget.onOpenDetail(need),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  // ============================================================
+  // ✅ MODERN NEED CARD WITH 3D GLASS EFFECT
+  // ============================================================
+  Widget _buildModernNeedCard(
+    legacy.Need need,
+    Color surface,
+    Color border,
+    Color textPrimary,
+    Color textSecondary,
+    Color textTertiary,
+  ) {
+    return ThreeDGlassCard(
+      glowColor: need.urgency == legacy.Urgency.high
+          ? AppColors.urgentHigh
+          : need.urgency == legacy.Urgency.medium
+              ? AppColors.urgentMedium
+              : AppColors.urgentLow,
+      onTap: () => widget.onOpenDetail(need),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
+              PillTag(
+                label: need.category.toUpperCase(),
+                foreground: AppColors.accent,
+                background: AppColors.accent.withValues(alpha: 0.1),
+              ),
+              const Spacer(),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Text(need.category,
-                        style: const TextStyle(
-                            color: AppColors.primaryLight,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
+                  const Icon(
+                    Icons.radar_rounded,
+                    size: 14,
+                    color: AppColors.textTertiary,
                   ),
-                  Text(need.timeElapsed,
-                      style: TextStyle(color: textTertiary, fontSize: 11)),
+                  const SizedBox(width: 6),
+                  Text(
+                    need.timeElapsed,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(need.title,
-                  style: TextStyle(
-                      color: textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Text(need.description,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: textSecondary, fontSize: 13, height: 1.4)),
-              const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Rs. ${need.budget}',
-                      style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16)),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(
-                        need.urgency.toString().split('.').last.toUpperCase(),
-                        style: const TextStyle(
-                            color: Colors.amber,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
-                  )
-                ],
-              )
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          Text(
+            need.title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: AppColors.textPrimary,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            need.description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              height: 1.5,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(height: 1.2, color: AppColors.border),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'VALUATION METRIC',
+                    style: TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Rs. ${need.budget}',
+                    style: const TextStyle(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _getUrgencyColor(need.urgency).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color:
+                        _getUrgencyColor(need.urgency).withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: 16,
+                      color: _getUrgencyColor(need.urgency),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getUrgencyLabel(need.urgency).toUpperCase(),
+                      style: TextStyle(
+                        color: _getUrgencyColor(need.urgency),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
+  }
+
+  Color _getUrgencyColor(legacy.Urgency urgency) {
+    if (urgency == legacy.Urgency.high) return AppColors.urgentHigh;
+    if (urgency == legacy.Urgency.medium) return AppColors.urgentMedium;
+    return AppColors.urgentLow;
+  }
+
+  String _getUrgencyLabel(legacy.Urgency urgency) {
+    if (urgency == legacy.Urgency.high) return 'High';
+    if (urgency == legacy.Urgency.medium) return 'Medium';
+    return 'Low';
   }
 }
