@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:uuid/uuid.dart';
-import 'package:need_marketplace/theme/app_colors.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:uuid/uuid.dart'; // ✅ ADD THIS
 import '../models/need_model.dart';
-import '../repositories/marketplace_repository.dart';
+import '../theme/app_colors.dart';
+import '../widgets/primary_loading_button.dart';
 
 class PostNeedFlowScreen extends StatefulWidget {
   const PostNeedFlowScreen({super.key});
@@ -13,349 +14,725 @@ class PostNeedFlowScreen extends StatefulWidget {
 }
 
 class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _repository = MarketplaceRepository();
+  static const int _totalSteps = 3;
 
-  String _selectedCategory = 'Mobile Phone';
-  String _selectedCompany = 'Apple (iPhone)';
-  String _condition = 'New';
-  String _paymentMethod = 'Cash';
+  final _pageController = PageController();
+  int _currentStep = 0;
+  bool _isPublishing = false;
 
-  final _customCompanyController = TextEditingController();
-  final _budgetController = TextEditingController();
+  // Form Controllers
+  final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  bool _isLoading = false;
+  final _budgetController = TextEditingController();
+  final _customCompanyController = TextEditingController();
 
-  final List<String> _categories = [
-    'Mobile Phone',
-    'Electronics',
-    'Vehicles',
-    'Real Estate',
-    'Jobs'
-  ];
-  final List<String> _companies = [
-    'Apple (iPhone)',
-    'Samsung',
-    'Infinix',
-    'Tecno',
-    'Oppo',
-    'Vivo',
-    'Redmi',
-    'Realme',
-    'Others'
-  ];
+  String? _selectedCategory;
+  String? _selectedCompany;
+  String? _condition;
+  String? _paymentMethod;
+  Urgency _selectedUrgency = Urgency.medium;
+  bool _showCompanyField = false;
 
   @override
   void dispose() {
-    _customCompanyController.dispose();
-    _budgetController.dispose();
+    _pageController.dispose();
+    _titleController.dispose();
     _descriptionController.dispose();
+    _budgetController.dispose();
+    _customCompanyController.dispose();
     super.dispose();
   }
 
-  void _processFormSubmission() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+  // ============================================================
+  // ✅ VALIDATIONS
+  // ============================================================
+  bool _validateStep1() {
+    if (_titleController.text.trim().isEmpty) {
+      _showError('Please enter a need title');
+      return false;
+    }
+    if (_selectedCategory == null) {
+      _showError('Please select a category');
+      return false;
+    }
+    if (_selectedCategory == 'Mobile Phone') {
+      if (_selectedCompany == null) {
+        _showError('Please select a company');
+        return false;
+      }
+      if (_selectedCompany == 'Others') {
+        if (_customCompanyController.text.trim().isEmpty) {
+          _showError('Please enter the company name');
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 
-    setState(() => _isLoading = true);
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      final String uniqueId = const Uuid().v4();
+  bool _validateStep2() {
+    if (_descriptionController.text.trim().isEmpty) {
+      _showError('Please enter a description');
+      return false;
+    }
+    final budgetText = _budgetController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (budgetText.isEmpty) {
+      _showError('Please enter a budget amount');
+      return false;
+    }
+    final budget = int.tryParse(budgetText) ?? 0;
+    if (budget <= 0) {
+      _showError('Budget must be greater than 0');
+      return false;
+    }
+    if (_condition == null) {
+      _showError('Please select condition (New/Used)');
+      return false;
+    }
+    if (_paymentMethod == null) {
+      _showError('Please select a payment method');
+      return false;
+    }
+    return true;
+  }
 
-      final NeedModel need = NeedModel(
-        id: uniqueId,
-        userId: user?.uid ?? '',
-        userName: user?.displayName ?? 'Verified Client',
-        category: _selectedCategory,
-        company: _selectedCategory == 'Mobile Phone' ? _selectedCompany : null,
-        customCompanyName: (_selectedCategory == 'Mobile Phone' &&
-                _selectedCompany == 'Others')
-            ? _customCompanyController.text.trim()
-            : null,
-        condition: _condition,
-        paymentMethod: _paymentMethod,
-        budget: double.parse(_budgetController.text.trim()),
-        description: _descriptionController.text.trim(),
-        createdAt: DateTime.now(),
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.urgentHigh,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _next() {
+    bool canProceed = false;
+
+    if (_currentStep == 0) {
+      canProceed = _validateStep1();
+    } else if (_currentStep == 1) {
+      canProceed = _validateStep2();
+    } else {
+      canProceed = true;
+    }
+
+    if (!canProceed) return;
+
+    if (_currentStep < _totalSteps - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
       );
-
-      await _repository.createNeedListing(need);
-      if (!mounted) return;
-
-      _displayPremiumPromotionPopup();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('⚠️ Transaction aborted: ${e.toString()}'),
-            backgroundColor: AppColors.urgentHigh),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    } else {
+      _publish();
     }
   }
 
-  void _displayPremiumPromotionPopup() {
+  void _back() {
+    if (_currentStep == 0) {
+      Navigator.of(context).pop();
+    } else {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  // ============================================================
+  // ✅ PUBLISH TO FIREBASE
+  // ============================================================
+  Future<void> _publish() async {
+    setState(() => _isPublishing = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showError('Please login to post a need');
+        setState(() => _isPublishing = false);
+        return;
+      }
+
+      // ✅ Generate unique ID
+      final String uniqueId = const Uuid().v4();
+
+      // Get user name
+      String userName = 'Anonymous';
+      if (user.displayName != null && user.displayName!.isNotEmpty) {
+        userName = user.displayName!;
+      } else if (user.email != null) {
+        userName = user.email!.split('@').first;
+      }
+
+      // Get company name
+      String? companyName;
+      if (_selectedCategory == 'Mobile Phone') {
+        if (_selectedCompany == 'Others') {
+          companyName = _customCompanyController.text.trim();
+        } else {
+          companyName = _selectedCompany;
+        }
+      }
+
+      // ✅ Build data map for Realtime Database
+      final Map<String, dynamic> needData = {
+        'id': uniqueId,
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'category': _selectedCategory ?? 'General',
+        'budget': int.tryParse(
+                _budgetController.text.replaceAll(RegExp(r'[^0-9]'), '')) ??
+            0,
+        'urgency': _selectedUrgency.toString().split('.').last,
+        'authorId': user.uid,
+        'authorName': userName,
+        'timestamp': ServerValue.timestamp,
+        'offers': 0,
+        'isPremium': false,
+        'condition': _condition ?? 'New',
+        'paymentMethod': _paymentMethod ?? 'Cash',
+        'userId': user.uid,
+        'userName': userName,
+      };
+
+      // Add company name if Mobile Phone
+      if (_selectedCategory == 'Mobile Phone') {
+        needData['company'] = companyName ?? '';
+        needData['customCompanyName'] =
+            _selectedCompany == 'Others' ? companyName : null;
+      }
+
+      // ✅ SAVE TO FIREBASE REALTIME DATABASE
+      final DatabaseReference dbRef =
+          FirebaseDatabase.instance.ref().child('needs');
+      await dbRef.push().set(needData);
+
+      if (!mounted) return;
+      setState(() => _isPublishing = false);
+
+      // ✅ Show success popup
+      _showSuccessPopup();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPublishing = false);
+      _showError('Error publishing: ${e.toString()}');
+    }
+  }
+
+  // ============================================================
+  // ✅ SUCCESS POPUP
+  // ============================================================
+  void _showSuccessPopup() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => Dialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.workspace_premium_rounded,
-                size: 64, color: Colors.amber),
-            const SizedBox(height: 16),
-            const Text('Your Need Is Posted',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 72,
+                width: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppColors.accent,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Your Need Is Posted!',
                 style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18)),
-            const SizedBox(height: 8),
-            const Text(
-                'Get More Attention From Sellers With Premium placement matrices.',
+                  color: AppColors.textPrimary,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Get More Attention From Sellers With Premium',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // Close dialog
-                      Navigator.pop(context); // Exit flow back to home screen
-                    },
-                    child: const Text('Skip'),
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _navigateToPremium();
+                  },
+                  child: const Text(
+                    'Upgrade to Premium',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      // ✅ Replaced with an inline production-level navigation route to completely resolve missing screen errors
-                      Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  const LocalPremiumFallbackView()));
-                    },
-                    child: const Text('Upgrade',
-                        style: TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Skip',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
-              ],
-            )
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToPremium() {
+    Navigator.pop(context);
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Premium Screen Coming Soon!'),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ============================================================
+  // ✅ BUILD
+  // ============================================================
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _back,
+        ),
+        title: const Text('Post a Need'),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildProgressIndicator(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (i) => setState(() => _currentStep = i),
+                children: [
+                  _buildStepOne(),
+                  _buildStepTwo(),
+                  _buildStepThree(),
+                ],
+              ),
+            ),
+            _buildBottomBar(),
           ],
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-          title: const Text('Post A Requirement'),
-          backgroundColor: AppColors.surface,
-          elevation: 0),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryLight))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      dropdownColor: AppColors.surface,
-                      style: const TextStyle(color: AppColors.textPrimary),
-                      decoration: const InputDecoration(
-                          labelText: 'Category Selection'),
-                      items: _categories
-                          .map((c) => DropdownMenuItem(
-                              value: c,
-                              child: Text(c,
-                                  style: const TextStyle(
-                                      color: AppColors.textPrimary))))
-                          .toList(),
-                      onChanged: (v) => setState(() => _selectedCategory = v!),
-                    ),
-                    if (_selectedCategory == 'Mobile Phone') ...[
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _selectedCompany,
-                        dropdownColor: AppColors.surface,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        decoration: const InputDecoration(
-                            labelText: 'Select Brand Company'),
-                        items: _companies
-                            .map((c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(c,
-                                    style: const TextStyle(
-                                        color: AppColors.textPrimary))))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedCompany = v!),
-                      ),
-                      if (_selectedCompany == 'Others') ...[
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _customCompanyController,
-                          style: const TextStyle(color: AppColors.textPrimary),
-                          decoration: const InputDecoration(
-                              labelText: 'Enter Company Name'),
-                          validator: (v) => (v == null || v.isEmpty)
-                              ? 'Company identification is mandatory'
-                              : null,
-                        ),
-                      ],
-                    ],
-                    const SizedBox(height: 20),
-                    const Text('Condition Specification',
-                        style: TextStyle(
-                            color: AppColors.accent,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
-                    Row(
-                      children: [
-                        Radio<String>(
-                            activeColor: AppColors.primary,
-                            value: 'New',
-                            groupValue: _condition,
-                            onChanged: (v) => setState(() => _condition = v!)),
-                        const Text('New',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                        const SizedBox(width: 20),
-                        Radio<String>(
-                            activeColor: AppColors.primary,
-                            value: 'Used',
-                            groupValue: _condition,
-                            onChanged: (v) => setState(() => _condition = v!)),
-                        const Text('Used',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Payment Settlement Strategy',
-                        style: TextStyle(
-                            color: AppColors.accent,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
-                    Row(
-                      children: [
-                        Radio<String>(
-                            activeColor: AppColors.primary,
-                            value: 'Cash',
-                            groupValue: _paymentMethod,
-                            onChanged: (v) =>
-                                setState(() => _paymentMethod = v!)),
-                        const Text('Cash',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                        const SizedBox(width: 20),
-                        Radio<String>(
-                            activeColor: AppColors.primary,
-                            value: 'Online Deposit',
-                            groupValue: _paymentMethod,
-                            onChanged: (v) =>
-                                setState(() => _paymentMethod = v!)),
-                        const Text('Online Deposit',
-                            style: TextStyle(color: AppColors.textPrimary)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _budgetController,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(color: AppColors.textPrimary),
-                      decoration: const InputDecoration(
-                          labelText: 'Target Account Budget Allocation (Rs.)'),
-                      validator: (v) {
-                        if (v == null || v.isEmpty)
-                          return 'Budget assignment parameters required';
-                        final numValue = double.tryParse(v);
-                        if (numValue == null || numValue <= 0)
-                          return 'Please evaluate structural positive baseline boundaries';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _descriptionController,
-                      maxLines: 4,
-                      style: const TextStyle(color: AppColors.textPrimary),
-                      decoration: const InputDecoration(
-                          labelText:
-                              'Detailed Narrative Specification Parameters'),
-                      validator: (v) => (v == null || v.isEmpty)
-                          ? 'Context explanation criteria baseline missing'
-                          : null,
-                    ),
-                    const SizedBox(height: 32),
-                    SWidthButton(
-                        onPressed: _processFormSubmission,
-                        title: 'Submit Requirement Pack')
-                  ],
+  // ============================================================
+  // PROGRESS INDICATOR
+  // ============================================================
+  Widget _buildProgressIndicator() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      child: Row(
+        children: List.generate(_totalSteps, (index) {
+          final isActive = index <= _currentStep;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: index < _totalSteps - 1 ? 8 : 0),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 6,
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primary : AppColors.border,
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
             ),
+          );
+        }),
+      ),
     );
   }
-}
 
-// ----------------------------------------------------------------------------
-// Local Inline Premium Fallback Framework View (Eliminates routing breaks)
-// ----------------------------------------------------------------------------
-class LocalPremiumFallbackView extends StatelessWidget {
-  const LocalPremiumFallbackView({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-          title: const Text('Premium Upgrade Console'),
-          backgroundColor: AppColors.surface,
-          elevation: 0),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.stars_rounded, size: 80, color: Colors.amber),
-            const SizedBox(height: 24),
-            const Text('Unlock Marketplace Premium Placement',
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18)),
-            const SizedBox(height: 12),
-            const Text(
-                'Get up to 10x faster verified responses from trusted global providers by locking your requirement to top-tier feeds.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13, height: 1.4)),
-            const SizedBox(height: 40),
-            SWidthButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text(
-                        '🎉 Premium verification request successfully logged onto systems!')));
-                Navigator.pop(context);
-              },
-              title: 'Activate Premium Pack (Rs. 1500 / Month)',
+  // ============================================================
+  // ✅ STEP 1
+  // ============================================================
+  Widget _buildStepOne() {
+    return _StepScaffold(
+      step: 'Step 1 of 3',
+      title: 'What do you need?',
+      subtitle: 'Choose a category and provide basic details.',
+      children: [
+        const _FieldLabel('Need title'),
+        TextField(
+          controller: _titleController,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            hintText: 'e.g. Flutter developer for a delivery app',
+          ),
+        ),
+        const SizedBox(height: 22),
+        const _FieldLabel('Category'),
+        DropdownButtonFormField<String>(
+          value: _selectedCategory,
+          isExpanded: true,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          hint: const Text('Choose a category'),
+          borderRadius: BorderRadius.circular(16),
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.category_outlined),
+          ),
+          items: MockData.categories
+              .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+              .toList(),
+          onChanged: (v) => setState(() {
+            _selectedCategory = v;
+            if (v != 'Mobile Phone') {
+              _selectedCompany = null;
+              _showCompanyField = false;
+              _customCompanyController.clear();
+            } else {
+              _showCompanyField = true;
+            }
+          }),
+        ),
+        if (_showCompanyField) ...[
+          const SizedBox(height: 22),
+          const _FieldLabel('Company'),
+          DropdownButtonFormField<String>(
+            value: _selectedCompany,
+            isExpanded: true,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            hint: const Text('Select a company'),
+            borderRadius: BorderRadius.circular(16),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.business_rounded),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Return back to Dashboard'),
+            items: MockData.mobileCompanies
+                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .toList(),
+            onChanged: (v) => setState(() {
+              _selectedCompany = v;
+              if (v != 'Others') {
+                _customCompanyController.clear();
+              }
+            }),
+          ),
+          if (_selectedCompany == 'Others') ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: _customCompanyController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                hintText: 'Enter company name',
+                prefixIcon: Icon(Icons.edit_rounded),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  // ============================================================
+  // ✅ STEP 2
+  // ============================================================
+  Widget _buildStepTwo() {
+    return _StepScaffold(
+      step: 'Step 2 of 3',
+      title: 'Add the details',
+      subtitle: 'Describe your need and set expectations.',
+      children: [
+        const _FieldLabel('Description'),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border, width: 1.4),
+          ),
+          child: Column(
+            children: [
+              _buildFakeToolbar(),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: TextField(
+                  controller: _descriptionController,
+                  maxLines: 6,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    hintText: 'Share scope, expectations, location, timeline…',
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        const _FieldLabel('Estimated budget'),
+        TextField(
+          controller: _budgetController,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+          decoration: InputDecoration(
+            hintText: '0',
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 8),
+              child: Container(
+                alignment: Alignment.center,
+                width: 44,
+                child: const Text(
+                  'PKR',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
+          ),
+        ),
+        const SizedBox(height: 22),
+        const _FieldLabel('Condition'),
+        Row(
+          children: [
+            Expanded(
+              child: _buildConditionCard('New', Icons.check_circle_rounded),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildConditionCard('Used', Icons.history_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        const _FieldLabel('Payment Method'),
+        Row(
+          children: [
+            Expanded(
+              child: _buildPaymentCard('Cash', Icons.money_rounded),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildPaymentCard(
+                  'Online Deposit', Icons.account_balance_rounded),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConditionCard(String label, IconData icon) {
+    final isSelected = _condition == label;
+    return GestureDetector(
+      onTap: () => setState(() => _condition = label),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: isSelected ? 2 : 1.4,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentCard(String label, IconData icon) {
+    final isSelected = _paymentMethod == label;
+    return GestureDetector(
+      onTap: () => setState(() => _paymentMethod = label),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: isSelected ? 2 : 1.4,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ✅ STEP 3
+  // ============================================================
+  Widget _buildStepThree() {
+    return _StepScaffold(
+      step: 'Step 3 of 3',
+      title: 'How urgent is it?',
+      subtitle: 'This helps providers prioritise the right requests.',
+      children: [
+        ...Urgency.values.map(
+          (u) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _UrgencyCard(
+              urgency: u,
+              selected: _selectedUrgency == u,
+              onTap: () => setState(() => _selectedUrgency = u),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFakeToolbar() {
+    const icons = [
+      Icons.format_bold_rounded,
+      Icons.format_italic_rounded,
+      Icons.format_list_bulleted_rounded,
+      Icons.link_rounded,
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: icons
+            .map(
+              (i) => Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Icon(i, size: 20, color: AppColors.textSecondary),
+              ),
             )
+            .toList(),
+      ),
+    );
+  }
+
+  // ============================================================
+  // BOTTOM BAR
+  // ============================================================
+  Widget _buildBottomBar() {
+    final isLast = _currentStep == _totalSteps - 1;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            if (_currentStep > 0) ...[
+              Expanded(
+                flex: 2,
+                child: OutlinedButton(
+                  onPressed: _back,
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              flex: 3,
+              child: PrimaryLoadingButton(
+                label: isLast ? 'Publish Need' : 'Continue',
+                icon: isLast ? Icons.rocket_launch_rounded : null,
+                isLoading: _isPublishing,
+                onPressed: _next,
+              ),
+            ),
           ],
         ),
       ),
@@ -363,26 +740,159 @@ class LocalPremiumFallbackView extends StatelessWidget {
   }
 }
 
-class SWidthButton extends StatelessWidget {
-  final VoidCallback onPressed;
+// ============================================================
+// HELPER WIDGETS
+// ============================================================
+
+class _StepScaffold extends StatelessWidget {
+  const _StepScaffold({
+    required this.step,
+    required this.title,
+    required this.subtitle,
+    required this.children,
+  });
+
+  final String step;
   final String title;
-  const SWidthButton({super.key, required this.onPressed, required this.title});
+  final String subtitle;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14))),
-        onPressed: onPressed,
-        child: Text(title,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+    final textTheme = Theme.of(context).textTheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step,
+            style: textTheme.labelLarge?.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(title, style: textTheme.headlineMedium?.copyWith(fontSize: 26)),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: textTheme.bodyLarge?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 28),
+          ...children,
+        ],
       ),
     );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, left: 2),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+class _UrgencyCard extends StatelessWidget {
+  const _UrgencyCard({
+    required this.urgency,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Urgency urgency;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? urgency.softColor : AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? urgency.color : AppColors.border,
+            width: selected ? 1.8 : 1.4,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: urgency.color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.local_fire_department_rounded,
+                color: urgency.color,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    urgency.shortLabel,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _subtitleFor(urgency),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedScale(
+              scale: selected ? 1 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: Icon(Icons.check_circle_rounded, color: urgency.color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _subtitleFor(Urgency u) {
+    switch (u) {
+      case Urgency.low:
+        return 'Flexible timeline, no rush';
+      case Urgency.medium:
+        return 'Needed within a few days';
+      case Urgency.high:
+        return 'Needed as soon as possible';
+    }
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
 import '../widgets/three_d_glass_card.dart';
 import '../widgets/pill_tag.dart';
+import 'offer_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   final List<legacy.Need> needs;
@@ -26,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
+  bool _isSellerMode = false;
+  String? _currentUserId;
+
   final List<String> _localCategories = [
     'All',
     'Mobile Phone',
@@ -36,9 +41,46 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    _listenToUserRole(); // ✅ REAL-TIME LISTENER
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ✅ REAL-TIME: Firestore se role listen karein
+  void _listenToUserRole() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data()!;
+        if (mounted) {
+          setState(() {
+            _isSellerMode = data['isSellerMode'] ?? false;
+          });
+        }
+      }
+    });
+  }
+
+  void _makeOffer(legacy.Need need) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => OfferSheet(need: need),
+    );
   }
 
   @override
@@ -64,8 +106,16 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    // ✅ Filter needs
+    // ✅ REAL-TIME FILTER: Role ke hisaab se needs filter karein
     final filteredNeeds = widget.needs.where((need) {
+      // ✅ BUYER MODE: Sirf apni needs
+      if (!_isSellerMode) {
+        if (need.authorId != _currentUserId && need.userId != _currentUserId) {
+          return false;
+        }
+      }
+      // ✅ SELLER MODE: Sab ki needs (no filter)
+
       final matchesCategory =
           _selectedCategory == 'All' || need.category == _selectedCategory;
       final matchesSearch = need.title
@@ -82,9 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ============================================================
-            // ✅ HEADER - USER NAME
-            // ============================================================
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Column(
@@ -108,13 +156,33 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
+                  // ✅ DYNAMIC MODE BADGE - Real-time update
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _isSellerMode
+                          ? AppColors.primary.withOpacity(0.15)
+                          : AppColors.accent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _isSellerMode ? '🔵 Seller Mode' : '🟢 Buyer Mode',
+                      style: TextStyle(
+                        color: _isSellerMode
+                            ? AppColors.primary
+                            : AppColors.accent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            // ============================================================
-            // ✅ SEARCH BAR - FIXED BORDER
-            // ============================================================
+            // Search Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Container(
@@ -173,9 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // ============================================================
-            // ✅ CATEGORY CHIPS
-            // ============================================================
+            // Category Chips
             const SizedBox(height: 12),
             SizedBox(
               height: 44,
@@ -212,9 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            // ============================================================
-            // ✅ NEED LIST
-            // ============================================================
+            // Need List
             Expanded(
               child: filteredNeeds.isEmpty
                   ? Center(
@@ -222,13 +286,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.search_off_rounded,
+                            _isSellerMode
+                                ? Icons.search_off_rounded
+                                : Icons.hourglass_empty_rounded,
                             size: 48,
                             color: textTertiary,
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'No matching needs found',
+                            _isSellerMode
+                                ? 'No needs available'
+                                : 'You haven\'t posted any needs yet',
                             style: TextStyle(
                               color: textSecondary,
                               fontSize: 16,
@@ -237,7 +305,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Try adjusting your search or filters',
+                            _isSellerMode
+                                ? 'Check back later for new requests'
+                                : 'Tap + to post your first need',
                             style: TextStyle(
                               color: textTertiary,
                               fontSize: 13,
@@ -262,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ============================================================
-  // ✅ NEED CARD
+  // ✅ NEED CARD - Offer button SIRF Seller Mode mein
   // ============================================================
   Widget _buildModernNeedCard(legacy.Need need) {
     return ThreeDGlassCard(
@@ -385,6 +455,43 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+              // ✅ OFFER BUTTON - SIRF SELLER MODE MEIN
+              if (_isSellerMode) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => _makeOffer(need),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.handshake_rounded,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Offer',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ],

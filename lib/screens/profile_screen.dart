@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -99,7 +100,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Theme-aware colors — drive every widget on this screen.
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bool isDarkMode = themeProvider.isDarkMode;
 
@@ -491,7 +491,7 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
 }
 
 // ----------------------------------------------------------------------------
-// FULL SETTINGS SCREEN - COMPLETE WITH PROVIDER INTEGRATION
+// FULL SETTINGS SCREEN - COMPLETE
 // ----------------------------------------------------------------------------
 
 class _FullEnterpriseSettingsScreen extends StatefulWidget {
@@ -507,14 +507,97 @@ class _FullEnterpriseSettingsScreenState
   bool _pushNotifications = true;
   bool _fingerprintEnabled = false;
   bool _faceIdEnabled = false;
+  bool _isSellerMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSellerMode();
+  }
+
+  // ✅ Load Seller Mode from Firestore
+  void _loadSellerMode() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get()
+        .then((doc) {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        if (mounted) {
+          setState(() {
+            _isSellerMode = data['isSellerMode'] ?? false;
+          });
+        }
+      } else {
+        // ✅ Create document if not exists
+        _createUserDocument(user);
+      }
+    }).catchError((e) {
+      print('Error loading seller mode: $e');
+    });
+  }
+
+  // ✅ Create user document if not exists
+  Future<void> _createUserDocument(User user) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'name': user.displayName ?? 'User',
+        'email': user.email ?? '',
+        'isSellerMode': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error creating user document: $e');
+    }
+  }
+
+  // ✅ Toggle Seller Mode - FIXED
+  Future<void> _toggleSellerMode(bool value) async {
+    setState(() => _isSellerMode = value);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final docRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final docSnapshot = await docRef.get();
+
+      if (docSnapshot.exists) {
+        // ✅ Document exists - Update it
+        await docRef.update({
+          'isSellerMode': value,
+        });
+      } else {
+        // ✅ Document doesn't exist - Create it
+        await docRef.set({
+          'uid': user.uid,
+          'name': user.displayName ?? 'User',
+          'email': user.email ?? '',
+          'isSellerMode': value,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      _showCoreFeedback(value
+          ? '🔵 Seller Mode activated! You can now view all needs and submit offers.'
+          : '🟢 Buyer Mode activated! You can now view your own needs.');
+    } catch (e) {
+      setState(() => _isSellerMode = !value);
+      _showCoreFeedback('Error updating mode: ${e.toString()}');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Read theme from provider
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bool isDarkMode = themeProvider.isDarkMode;
 
-    // ✅ Read settings from provider
     final settingsProvider = Provider.of<SettingsProvider>(context);
     final bool isBuyerMode = settingsProvider.isBuyerMode;
 
@@ -707,7 +790,32 @@ class _FullEnterpriseSettingsScreenState
           ),
 
           _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
-          // ✅ BUYER MODE - DYNAMIC WITH FIREBASE
+
+          // ✅ SELLER MODE TOGGLE - FIXED
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: SwitchListTile(
+              activeColor: AppColors.primaryLight,
+              title: Text('Seller Mode',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text(
+                  _isSellerMode
+                      ? 'You can view all needs and submit offers'
+                      : 'You can only view your own needs',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              value: _isSellerMode,
+              onChanged: _toggleSellerMode,
+            ),
+          ),
+
+          // Buyer / Customer Mode
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -734,7 +842,6 @@ class _FullEnterpriseSettingsScreenState
           ),
 
           _buildSectionHeader('🛠️ SUPPORT & LEGAL'),
-          // ✅ HELP & FAQ - DYNAMIC WITH NAVIGATION
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -755,8 +862,7 @@ class _FullEnterpriseSettingsScreenState
                   color: AppColors.textTertiary, size: 18),
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const HelpScreen()), // ✅ HelpScreen
+                  MaterialPageRoute(builder: (_) => const HelpScreen()),
                 );
               },
             ),

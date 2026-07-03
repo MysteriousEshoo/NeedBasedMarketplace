@@ -1,60 +1,25 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
 
 // ============================================================
 // ENUMS
 // ============================================================
 
-enum Urgency { low, medium, high }
+enum Urgency {
+  low('Low Urgency', AppColors.urgentLow, AppColors.urgentLowSoft),
+  medium('Medium Urgency', AppColors.urgentMedium, AppColors.urgentMediumSoft),
+  high('High Urgency', AppColors.urgentHigh, AppColors.urgentHighSoft);
 
-extension UrgencyX on Urgency {
-  String get label {
-    switch (this) {
-      case Urgency.low:
-        return 'Low';
-      case Urgency.medium:
-        return 'Medium';
-      case Urgency.high:
-        return 'Urgent';
-    }
-  }
+  const Urgency(this.label, this.color, this.softColor);
 
-  Color get color {
-    switch (this) {
-      case Urgency.low:
-        return AppColors.urgentLow;
-      case Urgency.medium:
-        return AppColors.urgentMedium;
-      case Urgency.high:
-        return AppColors.urgentHigh;
-    }
-  }
+  final String label;
+  final Color color;
+  final Color softColor;
 
-  Color get softColor {
-    switch (this) {
-      case Urgency.low:
-        return AppColors.urgentLowSoft;
-      case Urgency.medium:
-        return AppColors.urgentMediumSoft;
-      case Urgency.high:
-        return AppColors.urgentHighSoft;
-    }
-  }
-
-  String get shortLabel {
-    switch (this) {
-      case Urgency.low:
-        return 'Low';
-      case Urgency.medium:
-        return 'Medium';
-      case Urgency.high:
-        return 'High';
-    }
-  }
+  String get shortLabel => label.split(' ').first;
 }
 
-// ✅ Product Condition Enum
 enum ProductCondition {
   new_('New'),
   used('Used');
@@ -63,7 +28,6 @@ enum ProductCondition {
   final String label;
 }
 
-// ✅ Payment Method Enum
 enum PaymentMethod {
   cash('Cash'),
   onlineDeposit('Online Deposit');
@@ -73,30 +37,11 @@ enum PaymentMethod {
 }
 
 // ============================================================
-// NEED MODEL (With Firestore Support)
+// NEED CLASS (For Realtime Database)
 // ============================================================
 
 class Need {
-  final String id;
-  final String title;
-  final String description;
-  final String category;
-  final num budget;
-  final String timeElapsed;
-  final Urgency urgency;
-  final String authorName;
-  final int offers;
-  final String? userId;
-  final String? userName;
-  final String? company;
-  final String? customCompanyName;
-  final String? condition; // 'New' | 'Used'
-  final String? paymentMethod; // 'Cash' | 'Online Deposit'
-  final DateTime? createdAt;
-  final Map<String, dynamic>? location;
-  final bool isPremium;
-
-  Need({
+  const Need({
     required this.id,
     required this.title,
     required this.description,
@@ -106,92 +51,47 @@ class Need {
     required this.urgency,
     required this.authorName,
     required this.offers,
-    this.userId,
-    this.userName,
-    this.company,
-    this.customCompanyName,
+    this.companyName,
     this.condition,
     this.paymentMethod,
-    this.createdAt,
     this.location,
+    this.authorId,
     this.isPremium = false,
+    this.userId,
+    this.userName,
   });
 
-  num get formattedBudget => budget;
+  final String id;
+  final String title;
+  final String description;
+  final String category;
+  final int budget;
+  final String timeElapsed;
+  final Urgency urgency;
+  final String authorName;
+  final int offers;
+  final String? companyName;
+  final ProductCondition? condition;
+  final PaymentMethod? paymentMethod;
+  final String? location;
+  final String? authorId;
+  final bool isPremium;
+  final String? userId;
+  final String? userName;
 
-  Map<String, dynamic> toFirestore() {
-    return {
-      'id': id,
-      'title': title,
-      'description': description,
-      'category': category,
-      'budget': budget,
-      'timeElapsed': timeElapsed,
-      'urgency': urgency.toString().split('.').last,
-      'authorName': authorName,
-      'offers': offers,
-      'userId': userId,
-      'userName': userName,
-      'company': company,
-      'customCompanyName': customCompanyName,
-      'condition': condition,
-      'paymentMethod': paymentMethod,
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
-      'location': location,
-      'isPremium': isPremium,
-    };
-  }
-
-  factory Need.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return Need(
-      id: data['id'] ?? doc.id,
-      title: data['title'] ?? 'Untitled',
-      description: data['description'] ?? '',
-      category: data['category'] ?? 'General',
-      budget: data['budget'] ?? 0,
-      timeElapsed: data['timeElapsed'] ?? 'N/A',
-      urgency: (data['urgency'] as String?) == 'high'
-          ? Urgency.high
-          : (data['urgency'] as String?) == 'low'
-              ? Urgency.low
-              : Urgency.medium,
-      authorName: data['authorName'] ?? 'Anonymous',
-      offers: data['offers'] ?? 0,
-      userId: data['userId'],
-      userName: data['userName'],
-      company: data['company'],
-      customCompanyName: data['customCompanyName'],
-      condition: data['condition'],
-      paymentMethod: data['paymentMethod'],
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
-          : null,
-      location: data['location'],
-      isPremium: data['isPremium'] ?? false,
-    );
-  }
-
-  // ✅ Convert to NeedModel (for compatibility)
-  NeedModel toNeedModel() {
-    return NeedModel(
-      id: id,
-      userId: userId ?? '',
-      userName: userName ?? authorName,
-      category: category,
-      company: company,
-      customCompanyName: customCompanyName,
-      condition: condition ?? 'New',
-      paymentMethod: paymentMethod ?? 'Cash',
-      budget: budget.toDouble(),
-      description: description,
-      createdAt: createdAt ?? DateTime.now(),
-    );
+  String get formattedBudget {
+    final raw = budget.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < raw.length; i++) {
+      if (i > 0 && (raw.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(raw[i]);
+    }
+    return 'PKR $buffer';
   }
 }
 
 // ============================================================
-// NEED MODEL (Simplified Version)
+// NEED MODEL (For Firestore)
 // ============================================================
 
 class NeedModel {
@@ -250,43 +150,26 @@ class NeedModel {
       paymentMethod: data['paymentMethod'] ?? 'Cash',
       budget: (data['budget'] ?? 0).toDouble(),
       description: data['description'] ?? '',
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+    );
+  }
+
+  factory NeedModel.fromMap(String id, Map<String, dynamic> map) {
+    return NeedModel(
+      id: id,
+      userId: map['userId'] ?? '',
+      userName: map['userName'] ?? 'Anonymous',
+      category: map['category'] ?? 'General',
+      company: map['company'],
+      customCompanyName: map['customCompanyName'],
+      condition: map['condition'] ?? 'New',
+      paymentMethod: map['paymentMethod'] ?? 'Cash',
+      budget: (map['budget'] ?? 0).toDouble(),
+      description: map['description'] ?? '',
+      createdAt: map['createdAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['createdAt'])
           : DateTime.now(),
     );
-  }
-
-  // ✅ Convert to Need (for compatibility)
-  Need toNeed() {
-    return Need(
-      id: id,
-      title: description.length > 30
-          ? '${description.substring(0, 30)}...'
-          : description,
-      description: description,
-      category: category,
-      budget: budget,
-      timeElapsed: _getTimeAgo(createdAt),
-      urgency: Urgency.medium,
-      authorName: userName,
-      offers: 0,
-      userId: userId,
-      userName: userName,
-      company: company,
-      customCompanyName: customCompanyName,
-      condition: condition,
-      paymentMethod: paymentMethod,
-      createdAt: createdAt,
-    );
-  }
-
-  String _getTimeAgo(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays > 7) return '${date.day}/${date.month}/${date.year}';
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
-    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
-    return 'Just now';
   }
 }
 

@@ -9,8 +9,9 @@ import '../theme/app_colors.dart';
 import '../providers/theme_provider.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
-import 'post_need_screen.dart'; // ✅ Using PostNeedScreen
+import 'post_need_screen.dart';
 import 'profile_screen.dart';
+import 'seller_dashboard_feed.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -21,16 +22,16 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
-  int _postSignal = 0; // ✅ Will increment on new post
+  int _postSignal = 0;
   bool _isSellerModeActive = false;
 
   @override
   void initState() {
     super.initState();
-    _listenToUserRoleSyncPipeline();
+    _listenToUserRole();
   }
 
-  void _listenToUserRoleSyncPipeline() {
+  void _listenToUserRole() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -78,12 +79,10 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
-  // ✅ Post Need opens - after closing, increment signal
   Future<void> _openPostNeed() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PostNeedScreen()),
     );
-    // ✅ Refresh home screen after posting
     setState(() {
       _postSignal++;
     });
@@ -108,7 +107,10 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       extendBody: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: _GlowingFab(onPressed: _openPostNeed),
+      // ✅ FAB - ONLY show in Buyer Mode (NOT in Seller Mode)
+      floatingActionButton: _isSellerModeActive
+          ? null // ✅ Seller Mode mein FAB hidden
+          : _GlowingFab(onPressed: _openPostNeed),
       body: StreamBuilder(
         stream: FirebaseDatabase.instance.ref().child('needs').onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
@@ -136,6 +138,8 @@ class _MainShellState extends State<MainShell> {
                 urgency: dynamicUrgency,
                 authorName: data['authorName'] ?? 'Anonymous',
                 offers: data['offers'] ?? 0,
+                authorId: data['authorId'] ?? data['userId'],
+                userId: data['userId'],
               ));
             });
             liveNeeds = liveNeeds.reversed.toList();
@@ -144,21 +148,32 @@ class _MainShellState extends State<MainShell> {
           return IndexedStack(
             index: _tabIndex,
             children: [
+              // Index 0: Home / Seller Dashboard
               snapshot.connectionState == ConnectionState.waiting
                   ? const Center(child: CircularProgressIndicator())
-                  : HomeScreen(
-                      needs: liveNeeds,
-                      postSignal: _postSignal,
-                      onOpenDetail: _openDetail,
-                    ),
+                  : _isSellerModeActive
+                      ? SellerDashboardFeed()
+                      : HomeScreen(
+                          needs: liveNeeds,
+                          postSignal: _postSignal,
+                          onOpenDetail: _openDetail,
+                        ),
+
+              // Index 1: Saved Needs
               _SavedNeedsTab(onOpenDetail: _openDetail),
+
+              // Index 2: FAB Spacer
               const SizedBox.shrink(),
+
+              // Index 3: Messages
               const _PlaceholderTab(
                 icon: Icons.chat_bubble_rounded,
                 title: 'Messages',
                 message:
                     'All your conversations with providers will live here.',
               ),
+
+              // Index 4: Profile
               const ProfileScreen(),
             ],
           );
