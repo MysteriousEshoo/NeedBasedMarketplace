@@ -502,6 +502,10 @@ class _FullEnterpriseSettingsScreen extends StatefulWidget {
       _FullEnterpriseSettingsScreenState();
 }
 
+// ============================================================
+// FULL SETTINGS SCREEN - COMPLETE
+// ============================================================
+
 class _FullEnterpriseSettingsScreenState
     extends State<_FullEnterpriseSettingsScreen> {
   bool _pushNotifications = true;
@@ -515,7 +519,6 @@ class _FullEnterpriseSettingsScreenState
     _loadSellerMode();
   }
 
-  // ✅ Load Seller Mode from Firestore
   void _loadSellerMode() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -533,7 +536,6 @@ class _FullEnterpriseSettingsScreenState
           });
         }
       } else {
-        // ✅ Create document if not exists
         _createUserDocument(user);
       }
     }).catchError((e) {
@@ -541,7 +543,6 @@ class _FullEnterpriseSettingsScreenState
     });
   }
 
-  // ✅ Create user document if not exists
   Future<void> _createUserDocument(User user) async {
     try {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -569,12 +570,10 @@ class _FullEnterpriseSettingsScreenState
       final docSnapshot = await docRef.get();
 
       if (docSnapshot.exists) {
-        // ✅ Document exists - Update it
         await docRef.update({
           'isSellerMode': value,
         });
       } else {
-        // ✅ Document doesn't exist - Create it
         await docRef.set({
           'uid': user.uid,
           'name': user.displayName ?? 'User',
@@ -584,9 +583,8 @@ class _FullEnterpriseSettingsScreenState
         });
       }
 
-      _showCoreFeedback(value
-          ? '🔵 Seller Mode activated! You can now view all needs and submit offers.'
-          : '🟢 Buyer Mode activated! You can now view your own needs.');
+      _showCoreFeedback(
+          value ? '🔵 Seller Mode activated!' : '🟢 Buyer Mode activated!');
     } catch (e) {
       setState(() => _isSellerMode = !value);
       _showCoreFeedback('Error updating mode: ${e.toString()}');
@@ -689,8 +687,8 @@ class _FullEnterpriseSettingsScreenState
               onChanged: (v) {
                 setState(() => _pushNotifications = v);
                 _showCoreFeedback(v
-                    ? '🎉 Notifications turned on! You will now receive live alerts.'
-                    : '⏳ Notifications turned off. You won\'t receive live updates.');
+                    ? '🎉 Notifications turned on!'
+                    : '⏳ Notifications turned off.');
               },
             ),
           ),
@@ -752,8 +750,8 @@ class _FullEnterpriseSettingsScreenState
             (v) {
               themeProvider.setDarkMode(v);
               _showCoreFeedback(v
-                  ? '🌙 Premium Dark Mode activated successfully.'
-                  : '☀️ Clean Light Mode activated successfully.');
+                  ? '🌙 Premium Dark Mode activated.'
+                  : '☀️ Clean Light Mode activated.');
             },
             currentSurface,
             currentBorder,
@@ -791,7 +789,7 @@ class _FullEnterpriseSettingsScreenState
 
           _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
 
-          // ✅ SELLER MODE TOGGLE - FIXED
+          // ✅ SELLER MODE TOGGLE
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -811,11 +809,17 @@ class _FullEnterpriseSettingsScreenState
                       : 'You can only view your own needs',
                   style: TextStyle(color: currentSubText, fontSize: 11)),
               value: _isSellerMode,
-              onChanged: _toggleSellerMode,
+              onChanged: (value) async {
+                await _toggleSellerMode(value);
+                // ✅ Agar Seller Mode ON hai toh Buyer Mode OFF karein
+                if (value) {
+                  await settingsProvider.setBuyerMode(false);
+                }
+              },
             ),
           ),
 
-          // Buyer / Customer Mode
+          // ✅ BUYER / CUSTOMER MODE TOGGLE
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -832,11 +836,12 @@ class _FullEnterpriseSettingsScreenState
               subtitle: Text('Toggle client consumer search panel',
                   style: TextStyle(color: currentSubText, fontSize: 11)),
               value: isBuyerMode,
-              onChanged: (v) async {
+              onChanged: (value) async {
                 await settingsProvider.toggleBuyerMode();
-                _showCoreFeedback(v
-                    ? '🛒 Buyer Mode activated. You are now viewing as a customer.'
-                    : '📦 Provider Mode activated. You are now viewing as a fulfiller.');
+                // ✅ Agar Buyer Mode ON hai toh Seller Mode OFF karein
+                if (value) {
+                  await _toggleSellerMode(false);
+                }
               },
             ),
           ),

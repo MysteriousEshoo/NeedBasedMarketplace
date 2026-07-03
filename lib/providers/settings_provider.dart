@@ -58,4 +58,27 @@ class SettingsProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // ✅ ADD THIS METHOD
+  Future<void> setBuyerMode(bool value) async {
+    if (_isBuyerMode != value) {
+      _isBuyerMode = value;
+      notifyListeners();
+
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await FirebaseDatabase.instance
+              .ref()
+              .child('user_settings')
+              .child(user.uid)
+              .child('isBuyerMode')
+              .set(value);
+        }
+      } catch (e) {
+        _isBuyerMode = !value;
+        notifyListeners();
+      }
+    }
+  }
 }
