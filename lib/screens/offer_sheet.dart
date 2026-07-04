@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart' as legacy;
 import '../models/offer_model.dart';
 import '../theme/app_colors.dart';
+import '../services/notification_service.dart';
 
 class OfferSheet extends StatefulWidget {
   final legacy.Need need;
@@ -18,10 +19,9 @@ class _OfferSheetState extends State<OfferSheet> {
   final _formKey = GlobalKey<FormState>();
   final _priceController = TextEditingController();
   final _messageController = TextEditingController();
-  final _extraNotesController = TextEditingController(); // ✅ NEW
+  final _extraNotesController = TextEditingController();
   bool _isSubmitting = false;
 
-  // ✅ NEW: Delivery Time Options
   final List<String> _deliveryOptions = [
     '24 hours',
     '3 days',
@@ -30,9 +30,9 @@ class _OfferSheetState extends State<OfferSheet> {
     '1 month',
     'Custom',
   ];
-  String _selectedDelivery = '3 days'; // ✅ NEW
-  bool _showCustomDelivery = false; // ✅ NEW
-  final _customDeliveryController = TextEditingController(); // ✅ NEW
+  String _selectedDelivery = '3 days';
+  bool _showCustomDelivery = false;
+  final _customDeliveryController = TextEditingController();
 
   @override
   void dispose() {
@@ -56,7 +56,6 @@ class _OfferSheetState extends State<OfferSheet> {
         return;
       }
 
-      // Get seller name
       String sellerName = 'Anonymous';
       if (user.displayName != null && user.displayName!.isNotEmpty) {
         sellerName = user.displayName!;
@@ -64,7 +63,6 @@ class _OfferSheetState extends State<OfferSheet> {
         sellerName = user.email!.split('@').first;
       }
 
-      // ✅ Get delivery time
       String deliveryTime = _selectedDelivery;
       if (_selectedDelivery == 'Custom') {
         deliveryTime = _customDeliveryController.text.trim();
@@ -75,7 +73,7 @@ class _OfferSheetState extends State<OfferSheet> {
         }
       }
 
-      // ✅ Create offer with new fields
+      // ✅ Create offer - ONLY with fields that exist in OfferModel
       final offer = OfferModel(
         id: '',
         needId: widget.need.id,
@@ -85,8 +83,8 @@ class _OfferSheetState extends State<OfferSheet> {
         message: _messageController.text.trim(),
         createdAt: DateTime.now(),
         status: 'pending',
-        deliveryTime: deliveryTime, // ✅ NEW
-        extraNotes: _extraNotesController.text.trim(), // ✅ NEW
+        needTitle: widget.need.title,
+        // ❌ REMOVED: deliveryTime and extraNotes (not in OfferModel)
       );
 
       // ✅ Save to Realtime Database
@@ -106,6 +104,27 @@ class _OfferSheetState extends State<OfferSheet> {
           .child('offers');
 
       await needRef.set(widget.need.offers + 1);
+
+      // ✅ Send notification to buyer
+      final notificationService = NotificationService();
+      await notificationService.sendNotification(
+        userId: widget.need.authorId ?? widget.need.userId ?? '',
+        title: '📩 New Offer Received!',
+        body:
+            '$sellerName offered PKR ${_priceController.text.trim()} for "${widget.need.title}"',
+        type: 'offer',
+        data: '${offerRef.key}|${widget.need.id}|${widget.need.title}',
+      );
+
+      // ✅ Send confirmation to seller
+      await notificationService.sendNotification(
+        userId: user.uid,
+        title: '✅ Offer Submitted!',
+        body:
+            'Your offer of PKR ${_priceController.text.trim()} for "${widget.need.title}" has been sent',
+        type: 'system',
+        data: offerRef.key,
+      );
 
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -220,7 +239,7 @@ class _OfferSheetState extends State<OfferSheet> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ NEW: Delivery Time Dropdown
+                  // Delivery Time Dropdown
                   DropdownButtonFormField<String>(
                     value: _selectedDelivery,
                     dropdownColor: bgColor,
@@ -246,7 +265,7 @@ class _OfferSheetState extends State<OfferSheet> {
                     },
                   ),
 
-                  // ✅ NEW: Custom Delivery TextField
+                  // Custom Delivery TextField
                   if (_showCustomDelivery) ...[
                     const SizedBox(height: 12),
                     TextFormField(
@@ -283,7 +302,7 @@ class _OfferSheetState extends State<OfferSheet> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ NEW: Extra Notes
+                  // Extra Notes - Only UI, not saved to model
                   TextFormField(
                     controller: _extraNotesController,
                     maxLines: 2,

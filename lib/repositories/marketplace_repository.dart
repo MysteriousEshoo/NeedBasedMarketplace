@@ -1,52 +1,27 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
 import '../models/offer_model.dart';
 
 class MarketplaceRepository {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final DatabaseReference _database = FirebaseDatabase.instance.ref();
 
+  // ============================================================
+  // ✅ GET CURRENT USER
+  // ============================================================
   User? get currentUser => _auth.currentUser;
 
   // ============================================================
-  // ✅ STREAM ACTIVE NEEDS - REALTIME DATABASE
+  // ✅ STREAM ACTIVE NEEDS
   // ============================================================
   Stream<List<NeedModel>> streamActiveNeeds() {
-    return _database.child('needs').onValue.map((event) {
-      final List<NeedModel> needs = [];
-
-      if (event.snapshot.value != null) {
-        final Map<dynamic, dynamic> allMap =
-            event.snapshot.value as Map<dynamic, dynamic>;
-
-        allMap.forEach((key, value) {
-          final data = Map<String, dynamic>.from(value as Map);
-
-          final need = NeedModel(
-            id: key,
-            userId: data['userId'] ?? data['authorId'] ?? '',
-            userName: data['userName'] ?? data['authorName'] ?? 'Anonymous',
-            category: data['category'] ?? 'General',
-            company: data['company'],
-            customCompanyName: data['customCompanyName'],
-            condition: data['condition'] ?? 'New',
-            paymentMethod: data['paymentMethod'] ?? 'Cash',
-            budget: (data['budget'] ?? 0).toDouble(),
-            description: data['description'] ?? '',
-            createdAt: data['timestamp'] != null
-                ? DateTime.fromMillisecondsSinceEpoch(data['timestamp'])
-                : DateTime.now(),
-          );
-
-          needs.add(need);
-        });
-      }
-
-      // Sort by createdAt descending (newest first)
-      needs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return needs;
-    });
+    return _firestore
+        .collection('needs')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => NeedModel.fromFirestore(doc)).toList());
   }
 
   // ============================================================
@@ -57,24 +32,7 @@ class MarketplaceRepository {
     if (user == null) {
       throw Exception('User session unauthenticated.');
     }
-
-    final Map<String, dynamic> needData = {
-      'id': need.id,
-      'userId': need.userId,
-      'userName': need.userName,
-      'category': need.category,
-      'company': need.company,
-      'customCompanyName': need.customCompanyName,
-      'condition': need.condition,
-      'paymentMethod': need.paymentMethod,
-      'budget': need.budget,
-      'description': need.description,
-      'timestamp': ServerValue.timestamp,
-      'offers': 0,
-      'isPremium': false,
-    };
-
-    await _database.child('needs').push().set(needData);
+    await _firestore.collection('needs').doc(need.id).set(need.toFirestore());
   }
 
   // ============================================================
@@ -86,125 +44,130 @@ class MarketplaceRepository {
       throw Exception('User session unauthenticated.');
     }
 
-    final Map<String, dynamic> offerData = {
-      'id': offer.id,
-      'needId': offer.needId,
-      'sellerId': offer.sellerId,
-      'sellerName': offer.sellerName,
-      'offeredPrice': offer.offeredPrice,
-      'message': offer.message,
-      'createdAt': ServerValue.timestamp,
-      'status': offer.status,
-      'deliveryTime': offer.deliveryTime,
-      'extraNotes': offer.extraNotes,
-    };
+    await _firestore
+        .collection('offers')
+        .doc(offer.id)
+        .set(offer.toFirestore());
 
-    // Save offer under needId
-    await _database.child('offers').child(offer.needId).push().set(offerData);
+    final needSnapshot =
+        await _firestore.collection('needs').doc(offer.needId).get();
 
-    // Update offer count on need
-    final needRef = _database.child('needs').child(offer.needId);
-    final snapshot = await needRef.child('offers').get();
+    if (needSnapshot.exists) {
+      final needData = needSnapshot.data();
+      final buyerId = needData?['userId'];
 
-    int currentOffers = 0;
-    if (snapshot.exists) {
-      currentOffers = snapshot.value as int? ?? 0;
+      if (buyerId != null && buyerId.isNotEmpty) {
+        await _firestore
+            .collection('users')
+            .doc(buyerId)
+            .collection('notifications')
+            .add({
+          'title': 'New Offer Received!',
+          'body':
+              '${offer.sellerName} offered PKR ${offer.offeredPrice.toStringAsFixed(0)} for your need',
+          'needId': offer.needId,
+          'offerId': offer.id,
+          'timestamp': FieldValue.serverTimestamp(),
+          'seen': false,
+        });
+
+        await _firestore.collection('needs').doc(offer.needId).update({
+          'offers': FieldValue.increment(1),
+        });
+      }
     }
-
-    await needRef.child('offers').set(currentOffers + 1);
   }
 
   // ============================================================
-  // ✅ GET OFFERS FOR A NEED
+  // ✅ GET OFFERS FOR A NEED - FIXED
   // ============================================================
   Stream<List<OfferModel>> streamOffersForNeed(String needId) {
-    return _database.child('offers').child(needId).onValue.map((event) {
-      final List<OfferModel> offers = [];
-
-      if (event.snapshot.value != null) {
-        final Map<dynamic, dynamic> allMap =
-            event.snapshot.value as Map<dynamic, dynamic>;
-
-        allMap.forEach((key, value) {
-          final data = Map<String, dynamic>.from(value as Map);
-
-          final offer = OfferModel(
-            id: key,
-            needId: data['needId'] ?? needId,
-            sellerId: data['sellerId'] ?? '',
-            sellerName: data['sellerName'] ?? 'Anonymous',
-            offeredPrice: (data['offeredPrice'] ?? 0).toDouble(),
-            message: data['message'] ?? '',
-            createdAt: data['createdAt'] != null
-                ? DateTime.fromMillisecondsSinceEpoch(data['createdAt'])
-                : DateTime.now(),
-            status: data['status'] ?? 'pending',
-            deliveryTime: data['deliveryTime'] ?? '3 days',
-            extraNotes: data['extraNotes'] ?? '',
-          );
-
-          offers.add(offer);
-        });
-      }
-
-      offers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return offers;
-    });
+    return _firestore
+        .collection('offers')
+        .where('needId', isEqualTo: needId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => OfferModel.fromFirestore(doc)).toList());
   }
 
   // ============================================================
   // ✅ UPDATE OFFER STATUS
   // ============================================================
-  Future<void> updateOfferStatus(
-      String needId, String offerId, String status) async {
-    await _database
-        .child('offers')
-        .child(needId)
-        .child(offerId)
-        .child('status')
-        .set(status);
+  Future<void> updateOfferStatus(String offerId, String status) async {
+    await _firestore.collection('offers').doc(offerId).update({
+      'status': status,
+    });
   }
 
   // ============================================================
-  // ✅ GET NEED BY ID
+  // ✅ UPDATE USER ROLE
   // ============================================================
-  Future<NeedModel?> getNeedById(String needId) async {
-    final snapshot = await _database.child('needs').child(needId).get();
+  Future<void> updateUserRole(String userId, bool isSeller) async {
+    await _firestore.collection('users').doc(userId).update({
+      'isSellerMode': isSeller,
+    });
+  }
 
-    if (!snapshot.exists) {
-      return null;
+  // ============================================================
+  // ✅ GET USER ROLE
+  // ============================================================
+  Future<bool> getUserRole(String userId) async {
+    final doc = await _firestore.collection('users').doc(userId).get();
+    if (doc.exists) {
+      final data = doc.data();
+      return data?['isSellerMode'] ?? false;
     }
-
-    final data = snapshot.value as Map<dynamic, dynamic>;
-    return NeedModel(
-      id: needId,
-      userId: data['userId'] ?? data['authorId'] ?? '',
-      userName: data['userName'] ?? data['authorName'] ?? 'Anonymous',
-      category: data['category'] ?? 'General',
-      company: data['company'],
-      customCompanyName: data['customCompanyName'],
-      condition: data['condition'] ?? 'New',
-      paymentMethod: data['paymentMethod'] ?? 'Cash',
-      budget: (data['budget'] ?? 0).toDouble(),
-      description: data['description'] ?? '',
-      createdAt: data['timestamp'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(data['timestamp'])
-          : DateTime.now(),
-    );
+    return false;
   }
 
   // ============================================================
   // ✅ DELETE NEED
   // ============================================================
   Future<void> deleteNeed(String needId) async {
-    await _database.child('needs').child(needId).remove();
-    await _database.child('offers').child(needId).remove();
+    await _firestore.collection('needs').doc(needId).delete();
   }
 
   // ============================================================
-  // ✅ DELETE OFFER
+  // ✅ GET NEED BY ID
   // ============================================================
-  Future<void> deleteOffer(String needId, String offerId) async {
-    await _database.child('offers').child(needId).child(offerId).remove();
+  Future<NeedModel?> getNeedById(String needId) async {
+    final doc = await _firestore.collection('needs').doc(needId).get();
+    if (doc.exists) {
+      return NeedModel.fromFirestore(doc);
+    }
+    return null;
+  }
+
+  // ============================================================
+  // ✅ GET NOTIFICATIONS FOR USER
+  // ============================================================
+  Stream<List<Map<String, dynamic>>> streamNotifications(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              data['id'] = doc.id;
+              return data;
+            }).toList());
+  }
+
+  // ============================================================
+  // ✅ MARK NOTIFICATION AS SEEN
+  // ============================================================
+  Future<void> markNotificationSeen(
+      String userId, String notificationId) async {
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .doc(notificationId)
+        .update({
+      'seen': true,
+    });
   }
 }

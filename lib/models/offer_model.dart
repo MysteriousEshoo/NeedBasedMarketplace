@@ -8,9 +8,10 @@ class OfferModel {
   final double offeredPrice;
   final String message;
   final DateTime createdAt;
-  final String status; // 'pending', 'accepted', 'rejected'
-  final String deliveryTime; // ✅ NEW: '24 hours', '3 days', '1 week', etc.
-  final String extraNotes; // ✅ NEW: Additional notes from seller
+  final String status;
+  final String needTitle;
+  final String deliveryTime;
+  final String extraNotes;
 
   OfferModel({
     required this.id,
@@ -21,11 +22,12 @@ class OfferModel {
     this.message = '',
     required this.createdAt,
     this.status = 'pending',
-    this.deliveryTime = '3 days', // ✅ DEFAULT
-    this.extraNotes = '', // ✅ DEFAULT
+    required this.needTitle,
+    this.deliveryTime = '3 days',
+    this.extraNotes = '',
   });
 
-  // ✅ For Firestore
+  // ✅ toFirestore() METHOD - FIXED
   Map<String, dynamic> toFirestore() {
     return {
       'id': id,
@@ -36,11 +38,13 @@ class OfferModel {
       'message': message,
       'createdAt': Timestamp.fromDate(createdAt),
       'status': status,
-      'deliveryTime': deliveryTime, // ✅ NEW
-      'extraNotes': extraNotes, // ✅ NEW
+      'needTitle': needTitle,
+      'deliveryTime': deliveryTime,
+      'extraNotes': extraNotes,
     };
   }
 
+  // ✅ fromFirestore FACTORY METHOD
   factory OfferModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return OfferModel(
@@ -52,12 +56,13 @@ class OfferModel {
       message: data['message'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       status: data['status'] ?? 'pending',
-      deliveryTime: data['deliveryTime'] ?? '3 days', // ✅ NEW
-      extraNotes: data['extraNotes'] ?? '', // ✅ NEW
+      needTitle: data['needTitle'] ?? 'Need',
+      deliveryTime: data['deliveryTime'] ?? '3 days',
+      extraNotes: data['extraNotes'] ?? '',
     );
   }
 
-  // ✅ For Realtime Database
+  // ✅ toMap() FOR REALTIME DATABASE
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -68,11 +73,13 @@ class OfferModel {
       'message': message,
       'createdAt': createdAt.millisecondsSinceEpoch,
       'status': status,
-      'deliveryTime': deliveryTime, // ✅ NEW
-      'extraNotes': extraNotes, // ✅ NEW
+      'needTitle': needTitle,
+      'deliveryTime': deliveryTime,
+      'extraNotes': extraNotes,
     };
   }
 
+  // ✅ fromMap FOR REALTIME DATABASE
   factory OfferModel.fromMap(String id, Map<String, dynamic> map) {
     return OfferModel(
       id: id,
@@ -85,35 +92,9 @@ class OfferModel {
           ? DateTime.fromMillisecondsSinceEpoch(map['createdAt'])
           : DateTime.now(),
       status: map['status'] ?? 'pending',
-      deliveryTime: map['deliveryTime'] ?? '3 days', // ✅ NEW
-      extraNotes: map['extraNotes'] ?? '', // ✅ NEW
-    );
-  }
-
-  // ✅ Copy with method for status updates
-  OfferModel copyWith({
-    String? id,
-    String? needId,
-    String? sellerId,
-    String? sellerName,
-    double? offeredPrice,
-    String? message,
-    DateTime? createdAt,
-    String? status,
-    String? deliveryTime,
-    String? extraNotes,
-  }) {
-    return OfferModel(
-      id: id ?? this.id,
-      needId: needId ?? this.needId,
-      sellerId: sellerId ?? this.sellerId,
-      sellerName: sellerName ?? this.sellerName,
-      offeredPrice: offeredPrice ?? this.offeredPrice,
-      message: message ?? this.message,
-      createdAt: createdAt ?? this.createdAt,
-      status: status ?? this.status,
-      deliveryTime: deliveryTime ?? this.deliveryTime,
-      extraNotes: extraNotes ?? this.extraNotes,
+      needTitle: map['needTitle'] ?? 'Need',
+      deliveryTime: map['deliveryTime'] ?? '3 days',
+      extraNotes: map['extraNotes'] ?? '',
     );
   }
 }

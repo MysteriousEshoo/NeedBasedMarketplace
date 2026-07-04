@@ -13,6 +13,7 @@ import 'payment_methods_screen.dart';
 import 'help_screen.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/notification_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -81,11 +82,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _selectedLocalImage = File(image.path);
         });
-        _showStatusToast(
-            '🎉 Image asset parsed and successfully uploaded to your account view context!');
+        _showStatusToast('🎉 Image uploaded successfully!');
       }
     } catch (e) {
-      _showStatusToast('⚠️ Hardware permission or asset routing error.');
+      _showStatusToast('⚠️ Error uploading image.');
     }
   }
 
@@ -491,7 +491,7 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
 }
 
 // ----------------------------------------------------------------------------
-// FULL SETTINGS SCREEN - COMPLETE
+// FULL SETTINGS SCREEN
 // ----------------------------------------------------------------------------
 
 class _FullEnterpriseSettingsScreen extends StatefulWidget {
@@ -502,21 +502,19 @@ class _FullEnterpriseSettingsScreen extends StatefulWidget {
       _FullEnterpriseSettingsScreenState();
 }
 
-// ============================================================
-// FULL SETTINGS SCREEN - COMPLETE
-// ============================================================
-
 class _FullEnterpriseSettingsScreenState
     extends State<_FullEnterpriseSettingsScreen> {
   bool _pushNotifications = true;
   bool _fingerprintEnabled = false;
   bool _faceIdEnabled = false;
   bool _isSellerMode = false;
+  bool _notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadSellerMode();
+    _loadNotificationSettings();
   }
 
   void _loadSellerMode() {
@@ -543,6 +541,27 @@ class _FullEnterpriseSettingsScreenState
     });
   }
 
+  void _loadNotificationSettings() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseDatabase.instance
+        .ref()
+        .child('user_settings')
+        .child(user.uid)
+        .child('notifications')
+        .get()
+        .then((snapshot) {
+      if (snapshot.exists) {
+        if (mounted) {
+          setState(() {
+            _notificationsEnabled = snapshot.value as bool? ?? true;
+          });
+        }
+      }
+    });
+  }
+
   Future<void> _createUserDocument(User user) async {
     try {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -557,7 +576,6 @@ class _FullEnterpriseSettingsScreenState
     }
   }
 
-  // ✅ Toggle Seller Mode - FIXED
   Future<void> _toggleSellerMode(bool value) async {
     setState(() => _isSellerMode = value);
 
@@ -588,6 +606,28 @@ class _FullEnterpriseSettingsScreenState
     } catch (e) {
       setState(() => _isSellerMode = !value);
       _showCoreFeedback('Error updating mode: ${e.toString()}');
+    }
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    setState(() => _notificationsEnabled = value);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseDatabase.instance
+          .ref()
+          .child('user_settings')
+          .child(user.uid)
+          .child('notifications')
+          .set(value);
+
+      _showCoreFeedback(
+          value ? '🔔 Notifications enabled' : '🔕 Notifications disabled');
+    } catch (e) {
+      setState(() => _notificationsEnabled = !value);
+      _showCoreFeedback('Error: ${e.toString()}');
     }
   }
 
@@ -666,7 +706,9 @@ class _FullEnterpriseSettingsScreenState
             ),
           ),
 
-          _buildSectionHeader('🔔 NOTIFICATIONS (FCM BROADCASTS)'),
+          _buildSectionHeader('🔔 NOTIFICATIONS'),
+
+          // ✅ Notification Toggle
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -675,21 +717,18 @@ class _FullEnterpriseSettingsScreenState
                 border: Border.all(color: currentBorder)),
             child: SwitchListTile(
               activeColor: AppColors.primaryLight,
-              title: Text('Push Notifications',
+              title: Text('In-App Notifications',
                   style: TextStyle(
                       color: currentText,
                       fontWeight: FontWeight.bold,
                       fontSize: 13)),
               subtitle: Text(
-                  'Get real-time updates when sellers send you offers',
+                  _notificationsEnabled
+                      ? 'You will receive real-time alerts for messages and offers'
+                      : 'You will not receive any notifications',
                   style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _pushNotifications,
-              onChanged: (v) {
-                setState(() => _pushNotifications = v);
-                _showCoreFeedback(v
-                    ? '🎉 Notifications turned on!'
-                    : '⏳ Notifications turned off.');
-              },
+              value: _notificationsEnabled,
+              onChanged: _toggleNotifications,
             ),
           ),
 
@@ -789,7 +828,7 @@ class _FullEnterpriseSettingsScreenState
 
           _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
 
-          // ✅ SELLER MODE TOGGLE
+          // ✅ Seller Mode Toggle
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -811,7 +850,6 @@ class _FullEnterpriseSettingsScreenState
               value: _isSellerMode,
               onChanged: (value) async {
                 await _toggleSellerMode(value);
-                // ✅ Agar Seller Mode ON hai toh Buyer Mode OFF karein
                 if (value) {
                   await settingsProvider.setBuyerMode(false);
                 }
@@ -819,7 +857,7 @@ class _FullEnterpriseSettingsScreenState
             ),
           ),
 
-          // ✅ BUYER / CUSTOMER MODE TOGGLE
+          // ✅ Buyer Mode Toggle
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -838,7 +876,6 @@ class _FullEnterpriseSettingsScreenState
               value: isBuyerMode,
               onChanged: (value) async {
                 await settingsProvider.toggleBuyerMode();
-                // ✅ Agar Buyer Mode ON hai toh Seller Mode OFF karein
                 if (value) {
                   await _toggleSellerMode(false);
                 }
@@ -1378,8 +1415,7 @@ class _FullEnterpriseSettingsScreenState
   void _showComingSoon(String featureName) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-            '⏳ $featureName: Coming Soon... This feature is being updated live!'),
+        content: Text('⏳ $featureName: Coming Soon...'),
         backgroundColor: AppColors.primary,
         behavior: SnackBarBehavior.floating,
       ),

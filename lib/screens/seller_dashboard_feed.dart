@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -6,9 +7,9 @@ import '../models/need_model.dart';
 import '../models/need_model.dart' as legacy;
 import '../models/offer_model.dart';
 import '../repositories/marketplace_repository.dart';
-import 'chat_conversation_room_screen.dart';
+import 'chat_screen.dart';
 import 'offer_sheet.dart';
-import 'need_detail_screen.dart'; // ✅ ADD THIS IMPORT
+import 'need_detail_screen.dart';
 
 class SellerDashboardFeed extends StatefulWidget {
   const SellerDashboardFeed({super.key});
@@ -21,6 +22,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
   final List<Need> _needs = [];
   bool _isLoading = true;
   String? _error;
+  StreamSubscription? _subscription;
 
   @override
   void initState() {
@@ -28,11 +30,19 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
     _listenToNeeds();
   }
 
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
   void _listenToNeeds() {
     final dbRef = FirebaseDatabase.instance.ref().child('needs');
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-    dbRef.onValue.listen((event) {
+    _subscription?.cancel();
+
+    _subscription = dbRef.onValue.listen((event) {
       final List<Need> tempNeeds = [];
 
       if (event.snapshot.value != null) {
@@ -41,7 +51,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
 
         allMap.forEach((key, value) {
           final data = Map<String, dynamic>.from(value as Map);
-
           final String authorId = data['authorId'] ?? data['userId'] ?? '';
 
           // Skip own needs
@@ -65,8 +74,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
               urgency: urgency,
               authorName: data['authorName'] ?? 'Anonymous',
               offers: data['offers'] ?? 0,
-              userId: data['userId'] ?? data['authorId'],
-              userName: data['userName'] ?? data['authorName'],
+              userId: data['userId'] ?? data['authorId'] ?? '',
+              userName: data['userName'] ?? data['authorName'] ?? '',
               companyName: data['company'],
               condition: data['condition'] != null
                   ? (data['condition'] == 'New'
@@ -93,6 +102,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
         _error = null;
       });
     }, onError: (error) {
+      print('❌ Error: $error');
       setState(() {
         _isLoading = false;
         _error = error.toString();
@@ -128,7 +138,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
     );
   }
 
-  // ✅ Open Need Detail
   void _openNeedDetail(Need need) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -155,7 +164,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ HEADER WITH USER NAME
+            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Column(
@@ -179,7 +188,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  // ✅ Seller Mode Badge
                   Container(
                     margin: const EdgeInsets.only(top: 4),
                     padding:
@@ -276,7 +284,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                                   ),
                                   SizedBox(height: 16),
                                   Text(
-                                    'No needs available',
+                                    'No needs available from other users',
                                     style: TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 16,
@@ -298,8 +306,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                               itemCount: _needs.length,
                               padding: const EdgeInsets.all(16),
                               itemBuilder: (context, index) {
-                                final item = _needs[index];
-                                return _buildNeedCard(item);
+                                final need = _needs[index];
+                                return _buildNeedCard(need);
                               },
                             ),
             ),
@@ -311,7 +319,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
 
   Widget _buildNeedCard(Need need) {
     return GestureDetector(
-      onTap: () => _openNeedDetail(need), // ✅ ON TAP - Open Detail
+      onTap: () => _openNeedDetail(need),
       child: Card(
         color: AppColors.surface,
         margin: const EdgeInsets.only(bottom: 16),
@@ -323,7 +331,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Category + Budget
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -345,7 +352,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                   ),
                 ],
               ),
-              // Company
               if (need.companyName != null) ...[
                 const SizedBox(height: 6),
                 Text(
@@ -357,7 +363,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                   ),
                 ),
               ],
-              // Condition + Payment
               const SizedBox(height: 8),
               Text(
                 'Condition: ${need.condition?.label ?? 'N/A'} | Payment: ${need.paymentMethod?.label ?? 'N/A'}',
@@ -366,7 +371,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                   fontSize: 12,
                 ),
               ),
-              // Description
               const SizedBox(height: 12),
               Text(
                 need.description,
@@ -378,7 +382,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                   fontSize: 13,
                 ),
               ),
-              // Posted time
               const SizedBox(height: 8),
               Text(
                 'Posted ${need.timeElapsed}',
@@ -387,11 +390,9 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                   fontSize: 11,
                 ),
               ),
-              // Buttons
               const SizedBox(height: 16),
               Row(
                 children: [
-                  // Make Offer Button
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _showOfferSheet(context, need),
@@ -403,7 +404,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Chat Button
+                  // ✅ Chat Button - Fixed
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
@@ -413,11 +414,11 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ChatConversationRoomScreen(
-                              targetUserNodeId:
-                                  need.userId ?? need.authorId ?? '',
-                              targetUserDisplayName:
-                                  need.userName ?? need.authorName,
+                            builder: (_) => ChatScreen(
+                              needId: need.id,
+                              needTitle: need.title, // ✅ ADD THIS
+                              otherUserId: need.userId ?? need.authorId ?? '',
+                              otherUserName: need.userName ?? need.authorName,
                             ),
                           ),
                         );

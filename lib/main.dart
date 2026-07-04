@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/main_shell.dart';
 import 'screens/auth_screen.dart';
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/payment_provider.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'providers/notification_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +31,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => PaymentProvider()), // ✅ ADD THIS
+        ChangeNotifierProvider(create: (_) => PaymentProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: const NeedMarketplaceApp(),
     ),
@@ -53,19 +55,16 @@ class NeedMarketplaceApp extends StatelessWidget {
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          // 1️⃣ Jab tak Firebase data check kar raha hai, loader dikhao
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
-          // 2️⃣ Agar user logged in hai (chahe Email se ya Google se), direct main interface par le jao
           if (snapshot.hasData) {
             return const MainShell();
           }
 
-          // 3️⃣ 🎉 AGAR USER LOGGED IN NAHI HAI, TOH FORAN AUTH SCREEN DIKHAO
           return const AuthScreen();
         },
       ),
