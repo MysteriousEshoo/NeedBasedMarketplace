@@ -363,10 +363,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Saved Offers Pipeline Screen
-// ----------------------------------------------------------------------------
-
 class _SavedOffersPipelineScreen extends StatelessWidget {
   const _SavedOffersPipelineScreen();
 
@@ -681,7 +677,6 @@ class _FullEnterpriseSettingsScreenState
               currentBorder,
               currentText,
               currentSubText),
-
           Container(
             margin: const EdgeInsets.only(top: 4, bottom: 12),
             decoration: BoxDecoration(
@@ -705,10 +700,7 @@ class _FullEnterpriseSettingsScreenState
               onTap: _handleContactSalesAction,
             ),
           ),
-
           _buildSectionHeader('🔔 NOTIFICATIONS'),
-
-          // ✅ Notification Toggle
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -731,7 +723,6 @@ class _FullEnterpriseSettingsScreenState
               onChanged: _toggleNotifications,
             ),
           ),
-
           _buildSectionHeader('🔒 SECURITY & BIOMETRICS'),
           Container(
             margin: const EdgeInsets.only(bottom: 10),
@@ -756,7 +747,6 @@ class _FullEnterpriseSettingsScreenState
               },
             ),
           ),
-
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -780,7 +770,6 @@ class _FullEnterpriseSettingsScreenState
               },
             ),
           ),
-
           _buildSectionHeader('🌍 APP PREFERENCES'),
           _buildSwitchRow(
             'Dark Mode Theme',
@@ -797,7 +786,6 @@ class _FullEnterpriseSettingsScreenState
             currentText,
             currentSubText,
           ),
-
           _buildSectionHeader('💳 PAYMENTS'),
           Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -825,10 +813,7 @@ class _FullEnterpriseSettingsScreenState
               },
             ),
           ),
-
           _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
-
-          // ✅ Seller Mode Toggle
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -856,8 +841,6 @@ class _FullEnterpriseSettingsScreenState
               },
             ),
           ),
-
-          // ✅ Buyer Mode Toggle
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
@@ -882,7 +865,6 @@ class _FullEnterpriseSettingsScreenState
               },
             ),
           ),
-
           _buildSectionHeader('🛠️ SUPPORT & LEGAL'),
           Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -909,7 +891,6 @@ class _FullEnterpriseSettingsScreenState
               },
             ),
           ),
-
           const SizedBox(height: 24),
           _buildActionItem(
               'Logout from Session',
@@ -1529,10 +1510,6 @@ class _FullEnterpriseSettingsScreenState
     );
   }
 }
-
-// ----------------------------------------------------------------------------
-// My Needs Screen
-// ----------------------------------------------------------------------------
 
 class _MyNeedsScreen extends StatelessWidget {
   final String authorName;

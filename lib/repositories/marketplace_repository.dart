@@ -36,7 +36,7 @@ class MarketplaceRepository {
   }
 
   // ============================================================
-  // ✅ SUBMIT SELLER OFFER
+  // ✅ SUBMIT SELLER OFFER - FIXED
   // ============================================================
   Future<void> submitSellerOffer(OfferModel offer) async {
     final user = _auth.currentUser;
@@ -44,6 +44,7 @@ class MarketplaceRepository {
       throw Exception('User session unauthenticated.');
     }
 
+    // ✅ toFirestore() ab kaam karega
     await _firestore
         .collection('offers')
         .doc(offer.id)
@@ -79,7 +80,7 @@ class MarketplaceRepository {
   }
 
   // ============================================================
-  // ✅ GET OFFERS FOR A NEED - FIXED
+  // ✅ GET OFFERS FOR A NEED
   // ============================================================
   Stream<List<OfferModel>> streamOffersForNeed(String needId) {
     return _firestore

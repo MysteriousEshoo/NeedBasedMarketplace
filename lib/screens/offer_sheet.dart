@@ -5,6 +5,8 @@ import '../models/need_model.dart' as legacy;
 import '../models/offer_model.dart';
 import '../theme/app_colors.dart';
 import '../services/notification_service.dart';
+import '../services/chat_service.dart';
+import 'chat_screen.dart';
 
 class OfferSheet extends StatefulWidget {
   final legacy.Need need;
@@ -19,7 +21,6 @@ class _OfferSheetState extends State<OfferSheet> {
   final _formKey = GlobalKey<FormState>();
   final _priceController = TextEditingController();
   final _messageController = TextEditingController();
-  final _extraNotesController = TextEditingController();
   bool _isSubmitting = false;
 
   final List<String> _deliveryOptions = [
@@ -38,7 +39,6 @@ class _OfferSheetState extends State<OfferSheet> {
   void dispose() {
     _priceController.dispose();
     _messageController.dispose();
-    _extraNotesController.dispose();
     _customDeliveryController.dispose();
     super.dispose();
   }
@@ -56,11 +56,40 @@ class _OfferSheetState extends State<OfferSheet> {
         return;
       }
 
+      final existingOfferSnapshot = await FirebaseDatabase.instance
+          .ref()
+          .child('offers')
+          .child(widget.need.id)
+          .get();
+
+      bool hasExistingOffer = false;
+      if (existingOfferSnapshot.exists && existingOfferSnapshot.value is Map) {
+        final offersMap = existingOfferSnapshot.value as Map<dynamic, dynamic>;
+        hasExistingOffer = offersMap.values.any((value) {
+          if (value is! Map) return false;
+          final offerData = Map<String, dynamic>.from(value);
+          return offerData['sellerId'] == user.uid;
+        });
+      }
+
+      if (hasExistingOffer) {
+        _showError('You have already submitted an offer for this need!');
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
       String sellerName = 'Anonymous';
       if (user.displayName != null && user.displayName!.isNotEmpty) {
         sellerName = user.displayName!;
       } else if (user.email != null) {
         sellerName = user.email!.split('@').first;
+      }
+
+      final buyerId = widget.need.authorId ?? widget.need.userId ?? '';
+      if (buyerId.isEmpty) {
+        _showError('Buyer not found');
+        setState(() => _isSubmitting = false);
+        return;
       }
 
       String deliveryTime = _selectedDelivery;
@@ -73,7 +102,6 @@ class _OfferSheetState extends State<OfferSheet> {
         }
       }
 
-      // ✅ Create offer - ONLY with fields that exist in OfferModel
       final offer = OfferModel(
         id: '',
         needId: widget.need.id,
@@ -84,10 +112,9 @@ class _OfferSheetState extends State<OfferSheet> {
         createdAt: DateTime.now(),
         status: 'pending',
         needTitle: widget.need.title,
-        // ❌ REMOVED: deliveryTime and extraNotes (not in OfferModel)
+        deliveryTime: deliveryTime,
       );
 
-      // ✅ Save to Realtime Database
       final offerRef = FirebaseDatabase.instance
           .ref()
           .child('offers')
@@ -96,7 +123,6 @@ class _OfferSheetState extends State<OfferSheet> {
 
       await offerRef.set(offer.toMap());
 
-      // ✅ Update offer count on need
       final needRef = FirebaseDatabase.instance
           .ref()
           .child('needs')
@@ -105,23 +131,22 @@ class _OfferSheetState extends State<OfferSheet> {
 
       await needRef.set(widget.need.offers + 1);
 
-      // ✅ Send notification to buyer
       final notificationService = NotificationService();
       await notificationService.sendNotification(
-        userId: widget.need.authorId ?? widget.need.userId ?? '',
+        userId: buyerId,
         title: '📩 New Offer Received!',
         body:
-            '$sellerName offered PKR ${_priceController.text.trim()} for "${widget.need.title}"',
+            '$sellerName offered PKR ${_priceController.text.trim()} for "${widget.need.title}" (Delivery: $deliveryTime)',
         type: 'offer',
-        data: '${offerRef.key}|${widget.need.id}|${widget.need.title}',
+        data:
+            '${offerRef.key}|${widget.need.id}|${widget.need.title}|${user.uid}|$sellerName|$deliveryTime',
       );
 
-      // ✅ Send confirmation to seller
       await notificationService.sendNotification(
         userId: user.uid,
         title: '✅ Offer Submitted!',
         body:
-            'Your offer of PKR ${_priceController.text.trim()} for "${widget.need.title}" has been sent',
+            'Your offer of PKR ${_priceController.text.trim()} for "${widget.need.title}" has been sent (Delivery: $deliveryTime)',
         type: 'system',
         data: offerRef.key,
       );
@@ -129,8 +154,32 @@ class _OfferSheetState extends State<OfferSheet> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
 
+      final chatService = ChatService();
+
+      await chatService.sendMessage(
+        receiverId: buyerId,
+        receiverName: 'Buyer',
+        needId: widget.need.id,
+        needTitle: widget.need.title,
+        content:
+            '💰 Offer: PKR ${_priceController.text.trim()}\n⏱️ Delivery: $deliveryTime\n\n${_messageController.text.trim()}',
+        type: 'offer',
+      );
+
       _showSuccess('Offer submitted successfully! 🎉');
+
       Navigator.pop(context);
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            needId: widget.need.id,
+            needTitle: widget.need.title,
+            otherUserId: buyerId,
+            otherUserName: widget.need.authorName,
+          ),
+        ),
+      );
     } catch (e) {
       setState(() => _isSubmitting = false);
       _showError('Error: ${e.toString()}');
@@ -175,7 +224,6 @@ class _OfferSheetState extends State<OfferSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle
             Center(
               child: Container(
                 height: 5,
@@ -187,8 +235,6 @@ class _OfferSheetState extends State<OfferSheet> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Title
             const Text(
               'Submit an Offer',
               style: TextStyle(
@@ -198,7 +244,6 @@ class _OfferSheetState extends State<OfferSheet> {
               ),
             ),
             const SizedBox(height: 8),
-
             Text(
               'For: ${widget.need.title}',
               style: TextStyle(
@@ -207,12 +252,10 @@ class _OfferSheetState extends State<OfferSheet> {
               ),
             ),
             const SizedBox(height: 24),
-
             Form(
               key: _formKey,
               child: Column(
                 children: [
-                  // Price
                   TextFormField(
                     controller: _priceController,
                     keyboardType: TextInputType.number,
@@ -238,8 +281,6 @@ class _OfferSheetState extends State<OfferSheet> {
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // Delivery Time Dropdown
                   DropdownButtonFormField<String>(
                     value: _selectedDelivery,
                     dropdownColor: bgColor,
@@ -263,9 +304,16 @@ class _OfferSheetState extends State<OfferSheet> {
                         }
                       });
                     },
+                    validator: (v) {
+                      if (v == 'Custom') {
+                        final custom = _customDeliveryController.text.trim();
+                        if (custom.isEmpty) {
+                          return 'Please enter delivery time';
+                        }
+                      }
+                      return null;
+                    },
                   ),
-
-                  // Custom Delivery TextField
                   if (_showCustomDelivery) ...[
                     const SizedBox(height: 12),
                     TextFormField(
@@ -276,18 +324,9 @@ class _OfferSheetState extends State<OfferSheet> {
                         hintText: 'e.g. 5 business days',
                         prefixIcon: Icon(Icons.edit_rounded),
                       ),
-                      validator: (v) {
-                        if (_showCustomDelivery && (v == null || v.isEmpty)) {
-                          return 'Please enter delivery time';
-                        }
-                        return null;
-                      },
                     ),
                   ],
-
                   const SizedBox(height: 16),
-
-                  // Message
                   TextFormField(
                     controller: _messageController,
                     maxLines: 3,
@@ -300,24 +339,7 @@ class _OfferSheetState extends State<OfferSheet> {
                       alignLabelWithHint: true,
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Extra Notes - Only UI, not saved to model
-                  TextFormField(
-                    controller: _extraNotesController,
-                    maxLines: 2,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Extra Notes (Optional)',
-                      hintText: 'Any additional details...',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
                   const SizedBox(height: 24),
-
-                  // Submit Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,

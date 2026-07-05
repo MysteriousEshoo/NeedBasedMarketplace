@@ -41,7 +41,6 @@ class _ChatScreenState extends State<ChatScreen> {
       final hasText = _controller.text.trim().isNotEmpty;
       if (hasText != _hasText) setState(() => _hasText = hasText);
     });
-    // Mark incoming messages as seen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _chatService.markMessagesAsSeen(
         needId: widget.needId,
@@ -158,7 +157,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 return _buildEmptyState();
               }
 
-              // Auto-mark seen when new messages arrive
               _chatService.markMessagesAsSeen(
                 needId: widget.needId,
                 otherUserId: widget.otherUserId,
@@ -174,7 +172,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   final msg = messages[index];
                   final isMe = msg.senderId == _currentUserId;
 
-                  // Date separator
                   final showDate = index == 0 ||
                       !_isSameDay(messages[index - 1].timestamp, msg.timestamp);
 
@@ -382,6 +379,91 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Offer message special style
+    if (message.type == 'offer') {
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.8,
+          ),
+          decoration: BoxDecoration(
+            color: isMe ? AppColors.primary : AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.accent.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.local_offer_rounded,
+                      size: 16, color: AppColors.accent),
+                  SizedBox(width: 8),
+                  Text(
+                    '💰 Offer',
+                    style: TextStyle(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message.content,
+                style: TextStyle(
+                  color: isMe ? Colors.white : AppColors.textPrimary,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                message.formattedTime,
+                style: TextStyle(
+                  color: isMe ? Colors.white60 : AppColors.textTertiary,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ✅ System message style
+    if (message.type == 'system') {
+      return Align(
+        alignment: Alignment.center,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.accent.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.accent.withOpacity(0.3),
+            ),
+          ),
+          child: Text(
+            message.content,
+            style: const TextStyle(
+              color: AppColors.accent,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ✅ Regular text message
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -402,7 +484,6 @@ class _ChatBubble extends StatelessWidget {
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            // Sender name (only for other's messages)
             if (!isMe)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -414,8 +495,6 @@ class _ChatBubble extends StatelessWidget {
                       fontSize: 11),
                 ),
               ),
-
-            // Content
             Text(
               message.content,
               style: TextStyle(
@@ -429,8 +508,6 @@ class _ChatBubble extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-
-            // Time + status
             Row(mainAxisSize: MainAxisSize.min, children: [
               Text(
                 message.formattedTime,

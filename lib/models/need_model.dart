@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
 
-// ============================================================
-// ENUMS
-// ============================================================
-
 enum Urgency {
   low('Low Urgency', AppColors.urgentLow, AppColors.urgentLowSoft),
   medium('Medium Urgency', AppColors.urgentMedium, AppColors.urgentMediumSoft),
@@ -36,11 +32,25 @@ enum PaymentMethod {
   final String label;
 }
 
-// ============================================================
-// NEED CLASS (For Realtime Database)
-// ============================================================
-
 class Need {
+  final String id;
+  final String title;
+  final String description;
+  final String category;
+  final int budget;
+  final String timeElapsed;
+  final Urgency urgency;
+  final String authorName;
+  final int offers;
+  final String? companyName;
+  final ProductCondition? condition;
+  final PaymentMethod? paymentMethod;
+  final String? location;
+  final String? authorId;
+  final bool isPremium;
+  final String? userId;
+  final String? userName;
+
   const Need({
     required this.id,
     required this.title,
@@ -61,24 +71,6 @@ class Need {
     this.userName,
   });
 
-  final String id;
-  final String title;
-  final String description;
-  final String category;
-  final int budget;
-  final String timeElapsed;
-  final Urgency urgency;
-  final String authorName;
-  final int offers;
-  final String? companyName;
-  final ProductCondition? condition;
-  final PaymentMethod? paymentMethod;
-  final String? location;
-  final String? authorId;
-  final bool isPremium;
-  final String? userId;
-  final String? userName;
-
   String get formattedBudget {
     final raw = budget.toString();
     final buffer = StringBuffer();
@@ -89,10 +81,6 @@ class Need {
     return 'PKR $buffer';
   }
 }
-
-// ============================================================
-// NEED MODEL (For Firestore)
-// ============================================================
 
 class NeedModel {
   final String id;
@@ -121,6 +109,7 @@ class NeedModel {
     required this.createdAt,
   });
 
+  // ✅ toFirestore() METHOD - FOR FIRESTORE
   Map<String, dynamic> toFirestore() {
     return {
       'id': id,
@@ -137,6 +126,7 @@ class NeedModel {
     };
   }
 
+  // ✅ fromFirestore() FACTORY METHOD - FOR FIRESTORE
   factory NeedModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return NeedModel(
@@ -172,10 +162,6 @@ class NeedModel {
     );
   }
 }
-
-// ============================================================
-// MOCK DATA
-// ============================================================
 
 class MockData {
   MockData._();

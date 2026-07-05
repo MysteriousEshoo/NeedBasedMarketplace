@@ -7,11 +7,14 @@ import 'package:provider/provider.dart';
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
 import '../providers/theme_provider.dart';
+import '../services/notification_service.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
 import 'post_need_screen.dart';
 import 'profile_screen.dart';
 import 'seller_dashboard_feed.dart';
+import 'inbox_screen.dart';
+import 'notification_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -24,10 +27,12 @@ class _MainShellState extends State<MainShell> {
   int _tabIndex = 0;
   int _postSignal = 0;
   bool _isSellerModeActive = false;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
     _listenToUserRole();
   }
 
@@ -104,13 +109,69 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+    final Color surface = isDark ? AppColors.surface : Colors.white;
+
     return Scaffold(
       extendBody: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      // ✅ FAB - ONLY show in Buyer Mode (NOT in Seller Mode)
-      floatingActionButton: _isSellerModeActive
-          ? null // ✅ Seller Mode mein FAB hidden
-          : _GlowingFab(onPressed: _openPostNeed),
+      floatingActionButton:
+          _isSellerModeActive ? null : _GlowingFab(onPressed: _openPostNeed),
+      appBar: AppBar(
+        backgroundColor: surface,
+        elevation: 0,
+        title: const Text('NeedHub'),
+        actions: [
+          if (_currentUserId != null)
+            StreamBuilder<int>(
+              stream: NotificationService().getUnreadCount(_currentUserId!),
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                return Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_none_rounded),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    if (count > 0)
+                      Positioned(
+                        right: 4,
+                        top: 4,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            count > 9 ? '9+' : '$count',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
       body: StreamBuilder(
         stream: FirebaseDatabase.instance.ref().child('needs').onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
@@ -140,6 +201,7 @@ class _MainShellState extends State<MainShell> {
                 offers: data['offers'] ?? 0,
                 authorId: data['authorId'] ?? data['userId'],
                 userId: data['userId'],
+                userName: data['userName'],
               ));
             });
             liveNeeds = liveNeeds.reversed.toList();
@@ -148,32 +210,18 @@ class _MainShellState extends State<MainShell> {
           return IndexedStack(
             index: _tabIndex,
             children: [
-              // Index 0: Home / Seller Dashboard
               snapshot.connectionState == ConnectionState.waiting
                   ? const Center(child: CircularProgressIndicator())
                   : _isSellerModeActive
-                      ? SellerDashboardFeed()
+                      ? const SellerDashboardFeed()
                       : HomeScreen(
                           needs: liveNeeds,
                           postSignal: _postSignal,
                           onOpenDetail: _openDetail,
                         ),
-
-              // Index 1: Saved Needs
               _SavedNeedsTab(onOpenDetail: _openDetail),
-
-              // Index 2: FAB Spacer
               const SizedBox.shrink(),
-
-              // Index 3: Messages
-              const _PlaceholderTab(
-                icon: Icons.chat_bubble_rounded,
-                title: 'Messages',
-                message:
-                    'All your conversations with providers will live here.',
-              ),
-
-              // Index 4: Profile
+              const InboxScreen(),
               const ProfileScreen(),
             ],
           );
@@ -187,9 +235,6 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Saved Needs Tab
-// ----------------------------------------------------------------------------
 class _SavedNeedsTab extends StatelessWidget {
   final void Function(legacy.Need need) onOpenDetail;
   const _SavedNeedsTab({required this.onOpenDetail});
@@ -369,9 +414,6 @@ class HomeScreenCardViewPlaceholder extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Bottom Nav Bar
-// ----------------------------------------------------------------------------
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});
   final int currentIndex;
@@ -472,9 +514,6 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Placeholder Tab
-// ----------------------------------------------------------------------------
 class _PlaceholderTab extends StatelessWidget {
   const _PlaceholderTab(
       {required this.icon, required this.title, required this.message});
@@ -519,9 +558,6 @@ class _PlaceholderTab extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------------------------
-// Glowing FAB
-// ----------------------------------------------------------------------------
 class _GlowingFab extends StatelessWidget {
   const _GlowingFab({required this.onPressed});
   final VoidCallback onPressed;

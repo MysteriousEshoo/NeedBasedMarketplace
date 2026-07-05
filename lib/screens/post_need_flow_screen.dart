@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:uuid/uuid.dart'; // ✅ ADD THIS
+import 'package:uuid/uuid.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../widgets/primary_loading_button.dart';
@@ -20,7 +20,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
   int _currentStep = 0;
   bool _isPublishing = false;
 
-  // Form Controllers
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _budgetController = TextEditingController();
@@ -43,9 +42,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     super.dispose();
   }
 
-  // ============================================================
-  // ✅ VALIDATIONS
-  // ============================================================
   bool _validateStep1() {
     if (_titleController.text.trim().isEmpty) {
       _showError('Please enter a need title');
@@ -141,9 +137,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     }
   }
 
-  // ============================================================
-  // ✅ PUBLISH TO FIREBASE
-  // ============================================================
   Future<void> _publish() async {
     setState(() => _isPublishing = true);
 
@@ -155,10 +148,8 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         return;
       }
 
-      // ✅ Generate unique ID
       final String uniqueId = const Uuid().v4();
 
-      // Get user name
       String userName = 'Anonymous';
       if (user.displayName != null && user.displayName!.isNotEmpty) {
         userName = user.displayName!;
@@ -166,7 +157,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         userName = user.email!.split('@').first;
       }
 
-      // Get company name
       String? companyName;
       if (_selectedCategory == 'Mobile Phone') {
         if (_selectedCompany == 'Others') {
@@ -176,7 +166,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         }
       }
 
-      // ✅ Build data map for Realtime Database
       final Map<String, dynamic> needData = {
         'id': uniqueId,
         'title': _titleController.text.trim(),
@@ -197,14 +186,12 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         'userName': userName,
       };
 
-      // Add company name if Mobile Phone
       if (_selectedCategory == 'Mobile Phone') {
         needData['company'] = companyName ?? '';
         needData['customCompanyName'] =
             _selectedCompany == 'Others' ? companyName : null;
       }
 
-      // ✅ SAVE TO FIREBASE REALTIME DATABASE
       final DatabaseReference dbRef =
           FirebaseDatabase.instance.ref().child('needs');
       await dbRef.push().set(needData);
@@ -212,7 +199,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
       if (!mounted) return;
       setState(() => _isPublishing = false);
 
-      // ✅ Show success popup
       _showSuccessPopup();
     } catch (e) {
       if (!mounted) return;
@@ -221,9 +207,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     }
   }
 
-  // ============================================================
-  // ✅ SUCCESS POPUP
-  // ============================================================
   void _showSuccessPopup() {
     showDialog(
       context: context,
@@ -338,9 +321,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  // ============================================================
-  // ✅ BUILD
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -374,9 +354,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  // ============================================================
-  // PROGRESS INDICATOR
-  // ============================================================
   Widget _buildProgressIndicator() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -401,9 +378,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  // ============================================================
-  // ✅ STEP 1
-  // ============================================================
   Widget _buildStepOne() {
     return _StepScaffold(
       step: 'Step 1 of 3',
@@ -481,9 +455,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  // ============================================================
-  // ✅ STEP 2
-  // ============================================================
   Widget _buildStepTwo() {
     return _StepScaffold(
       step: 'Step 2 of 3',
@@ -654,9 +625,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  // ============================================================
-  // ✅ STEP 3
-  // ============================================================
   Widget _buildStepThree() {
     return _StepScaffold(
       step: 'Step 3 of 3',
@@ -699,9 +667,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  // ============================================================
-  // BOTTOM BAR
-  // ============================================================
   Widget _buildBottomBar() {
     final isLast = _currentStep == _totalSteps - 1;
     return Container(
@@ -739,10 +704,6 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 }
-
-// ============================================================
-// HELPER WIDGETS
-// ============================================================
 
 class _StepScaffold extends StatelessWidget {
   const _StepScaffold({

@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../theme/app_colors.dart';
 import '../models/need_model.dart';
-import '../models/need_model.dart' as legacy;
 import '../models/offer_model.dart';
 import '../repositories/marketplace_repository.dart';
 import 'chat_screen.dart';
@@ -36,6 +35,28 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
     super.dispose();
   }
 
+  // ✅ FIXED: Get urgency color
+  Color _getUrgencyColor(Urgency urgency) {
+    if (urgency == Urgency.high) {
+      return AppColors.urgentHigh;
+    } else if (urgency == Urgency.medium) {
+      return AppColors.urgentMedium;
+    } else {
+      return AppColors.urgentLow;
+    }
+  }
+
+  // ✅ FIXED: Get urgency label
+  String _getUrgencyLabel(Urgency urgency) {
+    if (urgency == Urgency.high) {
+      return 'High';
+    } else if (urgency == Urgency.medium) {
+      return 'Medium';
+    } else {
+      return 'Low';
+    }
+  }
+
   void _listenToNeeds() {
     final dbRef = FirebaseDatabase.instance.ref().child('needs');
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -56,10 +77,12 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
           // Skip own needs
           if (authorId == currentUserId) return;
 
+          // ✅ FIXED: Get urgency
           Urgency urgency = Urgency.medium;
-          if (data['urgency'] == 'high') {
+          final String urgencyStr = data['urgency'] ?? '';
+          if (urgencyStr == 'high') {
             urgency = Urgency.high;
-          } else if (data['urgency'] == 'low') {
+          } else if (urgencyStr == 'low') {
             urgency = Urgency.low;
           }
 
@@ -164,7 +187,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Column(
@@ -208,8 +230,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                 ],
               ),
             ),
-
-            // Body
             Expanded(
               child: _isLoading
                   ? const Center(
@@ -404,7 +424,6 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // ✅ Chat Button - Fixed
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
@@ -416,7 +435,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                           MaterialPageRoute(
                             builder: (_) => ChatScreen(
                               needId: need.id,
-                              needTitle: need.title, // ✅ ADD THIS
+                              needTitle: need.title,
                               otherUserId: need.userId ?? need.authorId ?? '',
                               otherUserName: need.userName ?? need.authorName,
                             ),

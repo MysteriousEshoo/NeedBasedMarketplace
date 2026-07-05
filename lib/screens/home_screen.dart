@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    _listenToUserRole(); // ✅ REAL-TIME LISTENER
+    _listenToUserRole();
   }
 
   @override
@@ -53,7 +53,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ✅ REAL-TIME: Firestore se role listen karein
   void _listenToUserRole() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -83,6 +82,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ✅ FIXED: Get urgency color
+  Color _getUrgencyColor(legacy.Urgency urgency) {
+    if (urgency == legacy.Urgency.high) {
+      return AppColors.urgentHigh;
+    } else if (urgency == legacy.Urgency.medium) {
+      return AppColors.urgentMedium;
+    } else {
+      return AppColors.urgentLow;
+    }
+  }
+
+  // ✅ FIXED: Get urgency label
+  String _getUrgencyLabel(legacy.Urgency urgency) {
+    if (urgency == legacy.Urgency.high) {
+      return 'High';
+    } else if (urgency == legacy.Urgency.medium) {
+      return 'Medium';
+    } else {
+      return 'Low';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -106,15 +127,13 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    // ✅ REAL-TIME FILTER: Role ke hisaab se needs filter karein
     final filteredNeeds = widget.needs.where((need) {
-      // ✅ BUYER MODE: Sirf apni needs
       if (!_isSellerMode) {
-        if (need.authorId != _currentUserId && need.userId != _currentUserId) {
+        final String authorId = need.authorId ?? need.userId ?? '';
+        if (authorId != _currentUserId) {
           return false;
         }
       }
-      // ✅ SELLER MODE: Sab ki needs (no filter)
 
       final matchesCategory =
           _selectedCategory == 'All' || need.category == _selectedCategory;
@@ -156,7 +175,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  // ✅ DYNAMIC MODE BADGE - Real-time update
                   Container(
                     margin: const EdgeInsets.only(top: 4),
                     padding:
@@ -332,15 +350,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ============================================================
-  // ✅ NEED CARD - Offer button SIRF Seller Mode mein
+  // ✅ NEED CARD - FIXED
   // ============================================================
   Widget _buildModernNeedCard(legacy.Need need) {
     return ThreeDGlassCard(
-      glowColor: need.urgency == legacy.Urgency.high
-          ? AppColors.urgentHigh
-          : need.urgency == legacy.Urgency.medium
-              ? AppColors.urgentMedium
-              : AppColors.urgentLow,
+      glowColor: _getUrgencyColor(need.urgency),
       onTap: () => widget.onOpenDetail(need),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +469,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              // ✅ OFFER BUTTON - SIRF SELLER MODE MEIN
               if (_isSellerMode) ...[
                 const SizedBox(width: 12),
                 GestureDetector(
@@ -497,17 +510,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
-
-  Color _getUrgencyColor(legacy.Urgency urgency) {
-    if (urgency == legacy.Urgency.high) return AppColors.urgentHigh;
-    if (urgency == legacy.Urgency.medium) return AppColors.urgentMedium;
-    return AppColors.urgentLow;
-  }
-
-  String _getUrgencyLabel(legacy.Urgency urgency) {
-    if (urgency == legacy.Urgency.high) return 'High';
-    if (urgency == legacy.Urgency.medium) return 'Medium';
-    return 'Low';
   }
 }

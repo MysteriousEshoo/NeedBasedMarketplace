@@ -11,7 +11,6 @@ class OfferModel {
   final String status;
   final String needTitle;
   final String deliveryTime;
-  final String extraNotes;
 
   OfferModel({
     required this.id,
@@ -24,10 +23,9 @@ class OfferModel {
     this.status = 'pending',
     required this.needTitle,
     this.deliveryTime = '3 days',
-    this.extraNotes = '',
   });
 
-  // ✅ toFirestore() METHOD - FIXED
+  // ✅ toFirestore() METHOD - FOR FIRESTORE
   Map<String, dynamic> toFirestore() {
     return {
       'id': id,
@@ -40,11 +38,10 @@ class OfferModel {
       'status': status,
       'needTitle': needTitle,
       'deliveryTime': deliveryTime,
-      'extraNotes': extraNotes,
     };
   }
 
-  // ✅ fromFirestore FACTORY METHOD
+  // ✅ fromFirestore() FACTORY METHOD - FOR FIRESTORE
   factory OfferModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return OfferModel(
@@ -58,11 +55,10 @@ class OfferModel {
       status: data['status'] ?? 'pending',
       needTitle: data['needTitle'] ?? 'Need',
       deliveryTime: data['deliveryTime'] ?? '3 days',
-      extraNotes: data['extraNotes'] ?? '',
     );
   }
 
-  // ✅ toMap() FOR REALTIME DATABASE
+  // ✅ toMap() METHOD - FOR REALTIME DATABASE
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -75,11 +71,10 @@ class OfferModel {
       'status': status,
       'needTitle': needTitle,
       'deliveryTime': deliveryTime,
-      'extraNotes': extraNotes,
     };
   }
 
-  // ✅ fromMap FOR REALTIME DATABASE
+  // ✅ fromMap() FACTORY METHOD - FOR REALTIME DATABASE
   factory OfferModel.fromMap(String id, Map<String, dynamic> map) {
     return OfferModel(
       id: id,
@@ -94,7 +89,6 @@ class OfferModel {
       status: map['status'] ?? 'pending',
       needTitle: map['needTitle'] ?? 'Need',
       deliveryTime: map['deliveryTime'] ?? '3 days',
-      extraNotes: map['extraNotes'] ?? '',
     );
   }
 }

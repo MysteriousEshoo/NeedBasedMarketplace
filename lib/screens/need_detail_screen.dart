@@ -21,7 +21,7 @@ class NeedDetailScreen extends StatefulWidget {
 
 class _NeedDetailScreenState extends State<NeedDetailScreen> {
   bool _isSellerMode = false;
-  String? _sellerId; // ✅ Store seller who has chat
+  String? _sellerId;
 
   @override
   void initState() {
@@ -46,14 +46,11 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
     });
   }
 
-  // ✅ Find seller who has chat with this need
   void _findChatSeller() {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final needId = widget.need.id;
 
-    // Check if current user is the buyer
     if (widget.need.authorId == currentUserId) {
-      // Buyer: find seller who sent message
       FirebaseDatabase.instance
           .ref()
           .child('chats')
@@ -62,10 +59,8 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
           .listen((event) {
         if (event.snapshot.value != null) {
           final data = event.snapshot.value as Map<dynamic, dynamic>;
-          // Find first chat channel
           data.forEach((channelId, value) {
             final channelData = Map<String, dynamic>.from(value as Map);
-            // Get senderId from first message
             if (channelData.isNotEmpty) {
               final firstMsg = channelData.values.first;
               if (firstMsg is Map) {
@@ -81,7 +76,6 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
         }
       });
     } else {
-      // Seller: chat with buyer
       _sellerId = widget.need.authorId;
     }
   }
@@ -112,14 +106,11 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
     String otherUserId;
     String otherUserName;
 
-    // ✅ If current user is buyer, use sellerId (if found), else use authorId
     if (currentUserId == needAuthorId) {
-      // Buyer viewing own need
       if (_sellerId != null && _sellerId!.isNotEmpty) {
         otherUserId = _sellerId!;
         otherUserName = 'Seller';
       } else {
-        // No seller yet - show message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('No seller has responded yet'),
@@ -130,7 +121,6 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
         return;
       }
     } else {
-      // Seller viewing - chat with buyer
       otherUserId = needAuthorId;
       otherUserName = widget.need.authorName;
     }
@@ -385,10 +375,8 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final isMyNeed = widget.need.authorId == currentUserId;
 
-    // ✅ Buyer ko chat show karna hai agar seller ne message kiya ho
     bool showChat = true;
     if (isMyNeed) {
-      // Buyer: chat show only if seller exists
       showChat = _sellerId != null && _sellerId!.isNotEmpty;
     }
 
@@ -402,15 +390,12 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
         top: false,
         child: Row(
           children: [
-            // ✅ Chat Button - show only if chat exists
             if (showChat)
               _SquareIconButton(
                 icon: Icons.chat_bubble_outline_rounded,
                 onTap: _openChat,
               ),
             if (showChat) const SizedBox(width: 12),
-
-            // Make Offer - only in seller mode and not own need
             if (_isSellerMode && !isMyNeed)
               Expanded(
                 child: FilledButton.icon(
@@ -425,7 +410,6 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                   ),
                 ),
               ),
-
             if (isMyNeed)
               Expanded(
                 child: OutlinedButton.icon(
