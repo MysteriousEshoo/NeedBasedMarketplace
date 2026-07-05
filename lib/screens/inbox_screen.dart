@@ -45,11 +45,12 @@ class _InboxScreenState extends State<InboxScreen> {
       return Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-            backgroundColor: surface,
-            title: Text('Messages', style: TextStyle(color: textPrimary))),
+          backgroundColor: surface,
+          title: Text('Messages', style: TextStyle(color: textPrimary)),
+        ),
         body: Center(
-            child:
-                Text('Please login', style: TextStyle(color: textSecondary))),
+          child: Text('Please login', style: TextStyle(color: textSecondary)),
+        ),
       );
     }
 
@@ -58,8 +59,10 @@ class _InboxScreenState extends State<InboxScreen> {
       appBar: AppBar(
         backgroundColor: surface,
         elevation: 0,
-        title: Text('Messages',
-            style: TextStyle(color: textPrimary, fontWeight: FontWeight.w800)),
+        title: Text(
+          'Messages',
+          style: TextStyle(color: textPrimary, fontWeight: FontWeight.w800),
+        ),
         iconTheme: IconThemeData(color: textPrimary),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -67,20 +70,18 @@ class _InboxScreenState extends State<InboxScreen> {
         ),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        // ✅ FIX: buyerOnly false for Seller Mode
         stream: _chatService.getUserChats(
           _currentUserId,
-          // ✅ Always false to show all chats
+          acceptedOnly: true,
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-                child:
-                    CircularProgressIndicator(color: AppColors.primaryLight));
+              child: CircularProgressIndicator(color: AppColors.primaryLight),
+            );
           }
 
           final chats = snapshot.data ?? [];
-          print('📊 Chats found: ${chats.length}');
 
           if (chats.isEmpty) {
             return _buildEmpty(isBuyerMode, textSecondary, textTertiary);
@@ -94,13 +95,11 @@ class _InboxScreenState extends State<InboxScreen> {
               final chat = chats[index];
               return _ChatTile(
                 chat: chat,
-                currentUserId: _currentUserId,
                 surface: surface,
                 border: border,
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
                 textTertiary: textTertiary,
-                isDark: isDark,
               );
             },
           );
@@ -110,7 +109,10 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Widget _buildEmpty(
-      bool isBuyerMode, Color textSecondary, Color textTertiary) {
+    bool isBuyerMode,
+    Color textSecondary,
+    Color textTertiary,
+  ) {
     return Center(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
@@ -120,20 +122,26 @@ class _InboxScreenState extends State<InboxScreen> {
             color: AppColors.primary.withOpacity(0.08),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.chat_bubble_outline_rounded,
-              color: AppColors.primary, size: 38),
+          child: const Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: AppColors.primary,
+            size: 38,
+          ),
         ),
         const SizedBox(height: 16),
         Text(
-          isBuyerMode ? 'No messages from sellers yet' : 'No conversations yet',
+          isBuyerMode ? 'No approved seller chats yet' : 'No approved chats yet',
           style: TextStyle(
-              color: textSecondary, fontSize: 16, fontWeight: FontWeight.w600),
+            color: textSecondary,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           isBuyerMode
-              ? 'When a seller messages you, it will appear here'
-              : 'Start chatting with buyers from their needs',
+              ? 'Accepted offer chats will appear here'
+              : 'When a buyer accepts your offer, the chat will appear here',
           textAlign: TextAlign.center,
           style: TextStyle(color: textTertiary, fontSize: 13),
         ),
@@ -142,22 +150,17 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 }
 
-// ─── Chat tile ────────────────────────────────────────────────────────────────
 class _ChatTile extends StatelessWidget {
   final Map<String, dynamic> chat;
-  final String currentUserId;
   final Color surface, border, textPrimary, textSecondary, textTertiary;
-  final bool isDark;
 
   const _ChatTile({
     required this.chat,
-    required this.currentUserId,
     required this.surface,
     required this.border,
     required this.textPrimary,
     required this.textSecondary,
     required this.textTertiary,
-    required this.isDark,
   });
 
   String _formatTime(dynamic ts) {
@@ -184,6 +187,7 @@ class _ChatTile extends StatelessWidget {
     final peerName = chat['peerName'] as String? ?? 'User';
     final lastMsg = chat['lastMessage'] as String? ?? '';
     final unread = chat['unreadCount'] as int? ?? 0;
+    final offerId = chat['offerId'] as String?;
     final time = _formatTime(chat['lastTimestamp']);
     final initial = peerName.isNotEmpty ? peerName[0].toUpperCase() : '?';
 
@@ -196,6 +200,7 @@ class _ChatTile extends StatelessWidget {
             needTitle: needTitle,
             otherUserId: peerId,
             otherUserName: peerName,
+            initialOfferId: offerId,
           ),
         ),
       ),
@@ -208,16 +213,18 @@ class _ChatTile extends StatelessWidget {
           border: Border.all(color: border),
         ),
         child: Row(children: [
-          // Avatar with unread badge
           Stack(children: [
             CircleAvatar(
               radius: 26,
               backgroundColor: AppColors.accent.withOpacity(0.12),
-              child: Text(initial,
-                  style: const TextStyle(
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18)),
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
             ),
             if (unread > 0)
               Positioned(
@@ -226,60 +233,84 @@ class _ChatTile extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: const BoxDecoration(
-                      color: AppColors.urgentHigh, shape: BoxShape.circle),
+                    color: AppColors.urgentHigh,
+                    shape: BoxShape.circle,
+                  ),
                   constraints:
                       const BoxConstraints(minWidth: 18, minHeight: 18),
                   child: Text(
                     unread > 9 ? '9+' : '$unread',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
               ),
           ]),
           const SizedBox(width: 12),
-
-          // Content
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Peer name
               Row(children: [
                 Expanded(
-                  child: Text(peerName,
-                      style: TextStyle(
-                          color: textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    peerName,
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Text(time, style: TextStyle(color: textTertiary, fontSize: 11)),
               ]),
               const SizedBox(height: 3),
-              // Need title
-              Text(
-                needTitle,
-                style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    needTitle,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Accepted',
+                    style: TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 3),
-              // Last message
               Text(
                 lastMsg,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: unread > 0 ? textPrimary : textSecondary,
-                    fontSize: 13,
-                    fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400),
+                  color: unread > 0 ? textPrimary : textSecondary,
+                  fontSize: 13,
+                  fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
             ]),
           ),

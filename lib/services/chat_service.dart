@@ -317,13 +317,19 @@ class ChatService {
         .set(0);
   }
 
-  Stream<List<Map<String, dynamic>>> getUserChats(String userId) {
+  Stream<List<Map<String, dynamic>>> getUserChats(
+    String userId, {
+    bool acceptedOnly = false,
+  }) {
     return _db.child('user_chats').child(userId).onValue.map((event) {
       final List<Map<String, dynamic>> chats = [];
       if (event.snapshot.value != null) {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         data.forEach((channelId, value) {
           final chat = Map<String, dynamic>.from(value as Map);
+          if (acceptedOnly && chat['offerStatus'] != 'accepted') {
+            return;
+          }
           chat['channelId'] = channelId.toString();
           chats.add(chat);
         });
