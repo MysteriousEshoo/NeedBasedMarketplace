@@ -139,7 +139,7 @@ class _OfferSheetState extends State<OfferSheet> {
             '$sellerName offered PKR ${_priceController.text.trim()} for "${widget.need.title}" (Delivery: $deliveryTime)',
         type: 'offer',
         data:
-            '${offerRef.key}|${widget.need.id}|${widget.need.title}|${user.uid}|$sellerName|$deliveryTime',
+            'offer_received|${offerRef.key}|${widget.need.id}|${widget.need.title}|${user.uid}|$sellerName|$deliveryTime|${_priceController.text.trim()}',
       );
 
       await notificationService.sendNotification(
@@ -147,8 +147,9 @@ class _OfferSheetState extends State<OfferSheet> {
         title: '✅ Offer Submitted!',
         body:
             'Your offer of PKR ${_priceController.text.trim()} for "${widget.need.title}" has been sent (Delivery: $deliveryTime)',
-        type: 'system',
-        data: offerRef.key,
+        type: 'offer',
+        data:
+            'offer_submitted|${offerRef.key}|${widget.need.id}|${widget.need.title}|$buyerId|${widget.need.authorName}|$deliveryTime|${_priceController.text.trim()}',
       );
 
       if (!mounted) return;
@@ -158,13 +159,20 @@ class _OfferSheetState extends State<OfferSheet> {
 
       await chatService.sendMessage(
         receiverId: buyerId,
-        receiverName: 'Buyer',
+        receiverName: widget.need.authorName.isNotEmpty
+            ? widget.need.authorName
+            : 'Buyer',
         needId: widget.need.id,
         needTitle: widget.need.title,
         content:
             '💰 Offer: PKR ${_priceController.text.trim()}\n⏱️ Delivery: $deliveryTime\n\n${_messageController.text.trim()}',
         type: 'offer',
+        offerId: offerRef.key,
+        offerStatus: 'pending',
+        chatDisabled: true,
       );
+
+      if (!mounted) return;
 
       _showSuccess('Offer submitted successfully! 🎉');
 
@@ -177,6 +185,7 @@ class _OfferSheetState extends State<OfferSheet> {
             needTitle: widget.need.title,
             otherUserId: buyerId,
             otherUserName: widget.need.authorName,
+            initialOfferId: offerRef.key,
           ),
         ),
       );

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import '../services/notification_service.dart';
-import '../services/chat_service.dart';
 import '../models/notification_model.dart';
-import '../models/offer_model.dart';
 import '../theme/app_colors.dart';
 import '../providers/theme_provider.dart';
 import 'chat_screen.dart';
@@ -19,8 +16,6 @@ class NotificationScreen extends StatefulWidget {
 
 class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notificationService = NotificationService();
-  final DatabaseReference _firebaseDatabase = FirebaseDatabase.instance.ref();
-  final ChatService _chatService = ChatService();
   String? _userId;
 
   @override
@@ -29,167 +24,35 @@ class _NotificationScreenState extends State<NotificationScreen> {
     _userId = FirebaseAuth.instance.currentUser?.uid;
   }
 
-  Future<void> _acceptOffer(
-    String offerId,
-    String needId,
-    String needTitle,
-    String sellerId,
-    String sellerName,
-    String deliveryTime,
-    NotificationModel notification,
-  ) async {
+  Future<void> _handleNotificationTap(NotificationModel notification) async {
     if (_userId == null) return;
 
-    try {
-      await _firebaseDatabase
-          .child('offers')
-          .child(needId)
-          .child(offerId)
-          .child('status')
-          .set('accepted');
+    await _notificationService.markAsSeen(_userId!, notification.id);
 
-      await _notificationService.sendNotification(
-        userId: sellerId,
-        title: '🎉 Offer Accepted!',
-        body:
-            'Your offer for "$needTitle" (Delivery: $deliveryTime) has been accepted by the buyer!',
-        type: 'system',
-        data: needId,
-      );
+    if (!mounted) return;
+    if (notification.type != 'offer' || notification.data == null) return;
 
-      await _chatService.sendSystemMessage(
-        receiverId: sellerId,
-        needId: needId,
-        needTitle: needTitle,
-        content:
-            '🎉 Offer Accepted! Delivery: $deliveryTime. You can now chat with the buyer.',
-      );
-
-      await _notificationService.markAsSeen(_userId!, notification.id);
-
-      if (!mounted) return;
-
+    final payload = _OfferNotificationPayload.tryParse(notification.data!);
+    if (payload == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Offer accepted! Chat is now enabled.'),
-          backgroundColor: AppColors.accent,
+          content: Text('This offer notification is missing chat details.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
-
-      Navigator.pop(context);
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            needId: needId,
-            needTitle: needTitle,
-            otherUserId: sellerId,
-            otherUserName: sellerName,
-          ),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      return;
     }
-  }
 
-  Future<void> _rejectOffer(
-    String offerId,
-    String needId,
-    NotificationModel notification,
-  ) async {
-    try {
-      await _firebaseDatabase
-          .child('offers')
-          .child(needId)
-          .child(offerId)
-          .child('status')
-          .set('rejected');
-
-      await _notificationService.markAsSeen(_userId!, notification.id);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Offer rejected.'),
-          backgroundColor: Colors.grey,
-          behavior: SnackBarBehavior.floating,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          needId: payload.needId,
+          needTitle: payload.needTitle,
+          otherUserId: payload.otherUserId,
+          otherUserName: payload.otherUserName,
+          initialOfferId: payload.offerId,
+          showOfferDecisionOnOpen: payload.action == 'offer_received',
         ),
-      );
-
-      Navigator.pop(context);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  void _showOfferActionDialog(
-    BuildContext context,
-    String offerId,
-    String needId,
-    String needTitle,
-    String sellerId,
-    String sellerName,
-    String deliveryTime,
-    NotificationModel notification,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('📩 Offer Received'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Need: $needTitle'),
-            const SizedBox(height: 4),
-            Text('Seller: $sellerName'),
-            const SizedBox(height: 4),
-            Text('Delivery: $deliveryTime'),
-            const SizedBox(height: 8),
-            Text(notification.body),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _rejectOffer(offerId, needId, notification);
-            },
-            child: const Text('Reject', style: TextStyle(color: Colors.red)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              _acceptOffer(
-                offerId,
-                needId,
-                needTitle,
-                sellerId,
-                sellerName,
-                deliveryTime,
-                notification,
-              );
-            },
-            child: const Text('Accept Offer',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -311,39 +174,62 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 border: border,
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
-                onTap: () {
-                  _notificationService.markAsSeen(_userId!, notification.id);
-
-                  if (notification.type == 'offer' &&
-                      notification.data != null) {
-                    final parts = notification.data!.split('|');
-                    if (parts.length == 6) {
-                      final offerId = parts[0];
-                      final needId = parts[1];
-                      final needTitle = parts[2];
-                      final sellerId = parts[3];
-                      final sellerName = parts[4];
-                      final deliveryTime = parts[5];
-
-                      _showOfferActionDialog(
-                        context,
-                        offerId,
-                        needId,
-                        needTitle,
-                        sellerId,
-                        sellerName,
-                        deliveryTime,
-                        notification,
-                      );
-                    }
-                  }
-                },
+                onTap: () => _handleNotificationTap(notification),
               );
             },
           );
         },
       ),
     );
+  }
+}
+
+class _OfferNotificationPayload {
+  final String action;
+  final String offerId;
+  final String needId;
+  final String needTitle;
+  final String otherUserId;
+  final String otherUserName;
+
+  const _OfferNotificationPayload({
+    required this.action,
+    required this.offerId,
+    required this.needId,
+    required this.needTitle,
+    required this.otherUserId,
+    required this.otherUserName,
+  });
+
+  static _OfferNotificationPayload? tryParse(String raw) {
+    final parts = raw.split('|');
+
+    if (parts.length >= 8 &&
+        (parts.first == 'offer_received' ||
+            parts.first == 'offer_submitted' ||
+            parts.first == 'offer_status')) {
+      return _OfferNotificationPayload(
+        action: parts[0],
+        offerId: parts[1],
+        needId: parts[2],
+        needTitle: parts[3],
+        otherUserId: parts[4],
+        otherUserName: parts[5],
+      );
+    }
+
+    if (parts.length == 6) {
+      return _OfferNotificationPayload(
+        action: 'offer_received',
+        offerId: parts[0],
+        needId: parts[1],
+        needTitle: parts[2],
+        otherUserId: parts[3],
+        otherUserName: parts[4],
+      );
+    }
+
+    return null;
   }
 }
 

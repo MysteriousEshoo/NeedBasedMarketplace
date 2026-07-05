@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/message_model.dart';
+import '../models/offer_model.dart';
 
 class ChatService {
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
@@ -18,6 +19,9 @@ class ChatService {
     required String content,
     String type = 'text',
     String? mediaUrl,
+    String? offerId,
+    String? offerStatus,
+    bool? chatDisabled,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -27,6 +31,7 @@ class ChatService {
         user.displayName ?? user.email?.split('@').first ?? 'User';
     final channelId = getChannelId(senderId, receiverId, needId);
     final nowMillis = DateTime.now().millisecondsSinceEpoch;
+    final lastMessage = type == 'text' ? content : 'Offer';
 
     final message = MessageModel(
       id: '',
@@ -45,17 +50,26 @@ class ChatService {
     final msgRef = _db.child('chats').child(needId).child(channelId).push();
     await msgRef.set(message.toMap());
 
-    await _db.child('user_chats').child(senderId).child(channelId).set({
+    final senderChatData = <String, Object?>{
       'channelId': channelId,
       'needId': needId,
       'needTitle': needTitle,
       'peerId': receiverId,
       'peerName': receiverName,
-      'lastMessage': type == 'text' ? content : '📎 Media',
+      'lastMessage': lastMessage,
       'lastTimestamp': nowMillis,
       'unreadCount': 0,
       'iAmSender': true,
-    });
+      if (offerId != null) 'offerId': offerId,
+      if (offerStatus != null) 'offerStatus': offerStatus,
+      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    };
+
+    await _db
+        .child('user_chats')
+        .child(senderId)
+        .child(channelId)
+        .update(senderChatData);
 
     final receiverChatRef =
         _db.child('user_chats').child(receiverId).child(channelId);
@@ -63,18 +77,22 @@ class ChatService {
     final snap = await receiverChatRef.child('unreadCount').get();
     final currentUnread = snap.exists ? (snap.value as int? ?? 0) : 0;
 
-    await receiverChatRef.set({
+    final receiverChatData = <String, Object?>{
       'channelId': channelId,
       'needId': needId,
       'needTitle': needTitle,
       'peerId': senderId,
       'peerName': senderName,
-      'lastMessage': type == 'text' ? content : '📎 Media',
+      'lastMessage': lastMessage,
       'lastTimestamp': nowMillis,
       'unreadCount': currentUnread + 1,
       'iAmSender': false,
-    });
+      if (offerId != null) 'offerId': offerId,
+      if (offerStatus != null) 'offerStatus': offerStatus,
+      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    };
 
+    await receiverChatRef.update(receiverChatData);
     await msgRef.child('status').set('delivered');
   }
 
@@ -83,21 +101,26 @@ class ChatService {
     required String needId,
     required String needTitle,
     required String content,
+    String receiverName = 'User',
+    String? offerId,
+    String? offerStatus,
+    bool? chatDisabled,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final senderId = user.uid;
-    final senderName = 'System';
+    final currentUserName =
+        user.displayName ?? user.email?.split('@').first ?? 'User';
     final channelId = getChannelId(senderId, receiverId, needId);
     final nowMillis = DateTime.now().millisecondsSinceEpoch;
 
     final message = MessageModel(
       id: '',
       senderId: senderId,
-      senderName: senderName,
+      senderName: 'System',
       receiverId: receiverId,
-      receiverName: 'User',
+      receiverName: receiverName,
       needId: needId,
       content: content,
       type: 'system',
@@ -109,17 +132,26 @@ class ChatService {
     final msgRef = _db.child('chats').child(needId).child(channelId).push();
     await msgRef.set(message.toMap());
 
-    await _db.child('user_chats').child(senderId).child(channelId).set({
+    final senderChatData = <String, Object?>{
       'channelId': channelId,
       'needId': needId,
       'needTitle': needTitle,
       'peerId': receiverId,
-      'peerName': 'System',
+      'peerName': receiverName,
       'lastMessage': content,
       'lastTimestamp': nowMillis,
       'unreadCount': 0,
       'iAmSender': true,
-    });
+      if (offerId != null) 'offerId': offerId,
+      if (offerStatus != null) 'offerStatus': offerStatus,
+      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    };
+
+    await _db
+        .child('user_chats')
+        .child(senderId)
+        .child(channelId)
+        .update(senderChatData);
 
     final receiverChatRef =
         _db.child('user_chats').child(receiverId).child(channelId);
@@ -127,16 +159,95 @@ class ChatService {
     final snap = await receiverChatRef.child('unreadCount').get();
     final currentUnread = snap.exists ? (snap.value as int? ?? 0) : 0;
 
-    await receiverChatRef.set({
+    final receiverChatData = <String, Object?>{
       'channelId': channelId,
       'needId': needId,
       'needTitle': needTitle,
       'peerId': senderId,
-      'peerName': 'System',
+      'peerName': currentUserName,
       'lastMessage': content,
       'lastTimestamp': nowMillis,
       'unreadCount': currentUnread + 1,
       'iAmSender': false,
+      if (offerId != null) 'offerId': offerId,
+      if (offerStatus != null) 'offerStatus': offerStatus,
+      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    };
+
+    await receiverChatRef.update(receiverChatData);
+  }
+
+  Stream<OfferModel?> watchOfferForChat({
+    required String needId,
+    required String otherUserId,
+  }) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final sellerCandidates = {currentUserId, otherUserId};
+
+    return _db.child('offers').child(needId).onValue.map((event) {
+      final offers = <OfferModel>[];
+      if (event.snapshot.value != null) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        data.forEach((key, value) {
+          if (value is! Map) return;
+          final offerMap = Map<String, dynamic>.from(value);
+          if (sellerCandidates.contains(offerMap['sellerId'])) {
+            offers.add(OfferModel.fromMap(key.toString(), offerMap));
+          }
+        });
+      }
+
+      if (offers.isEmpty) return null;
+      offers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return offers.first;
+    });
+  }
+
+  Future<void> updateOfferDecision({
+    required String needId,
+    required String needTitle,
+    required String offerId,
+    required String buyerId,
+    required String buyerName,
+    required String sellerId,
+    required String sellerName,
+    required String status,
+  }) async {
+    final nowMillis = DateTime.now().millisecondsSinceEpoch;
+    final channelId = getChannelId(buyerId, sellerId, needId);
+    final chatDisabled = status != 'accepted';
+    final statusMessage =
+        status == 'accepted' ? 'Offer accepted' : 'Offer rejected';
+
+    await _db.child('offers').child(needId).child(offerId).update({
+      'status': status,
+      'respondedAt': nowMillis,
+    });
+
+    await _db.child('user_chats').child(buyerId).child(channelId).update({
+      'channelId': channelId,
+      'needId': needId,
+      'needTitle': needTitle,
+      'peerId': sellerId,
+      'peerName': sellerName,
+      'offerId': offerId,
+      'offerStatus': status,
+      'chatDisabled': chatDisabled,
+      'lastMessage': statusMessage,
+      'lastTimestamp': nowMillis,
+    });
+
+    await _db.child('user_chats').child(sellerId).child(channelId).update({
+      'channelId': channelId,
+      'needId': needId,
+      'needTitle': needTitle,
+      'peerId': buyerId,
+      'peerName': buyerName,
+      'offerId': offerId,
+      'offerStatus': status,
+      'chatDisabled': chatDisabled,
+      'lastMessage': statusMessage,
+      'lastTimestamp': nowMillis,
     });
   }
 
