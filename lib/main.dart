@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
 import 'screens/main_shell.dart';
 import 'screens/auth_screen.dart';
 import 'theme/app_theme.dart';
@@ -14,16 +15,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyA1ZvbhOuNkRmvn9PFVgp_JJ6ZC_oqPwVc",
-      authDomain: "needbasedmarketplace.firebaseapp.com",
-      databaseURL:
-          "https://needbasedmarketplace-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "needbasedmarketplace",
-      storageBucket: "needbasedmarketplace.firebasestorage.app",
-      messagingSenderId: "976134004608",
-      appId: "1:976134004608:web:bed2a0b2bbf65853b16b65",
-    ),
+    options: DefaultFirebaseOptions.currentPlatform,
   );
 
   runApp(

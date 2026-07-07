@@ -1,14 +1,97 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
 import '../models/message_model.dart';
 import '../models/offer_model.dart';
 
 class ChatService {
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   String getChannelId(String userId1, String userId2, String needId) {
     final ids = [userId1, userId2]..sort();
     return '${ids[0]}_${ids[1]}_$needId';
+  }
+
+  String _userName(User user) {
+    final displayName = user.displayName?.trim();
+    if (displayName != null && displayName.isNotEmpty) return displayName;
+    return user.email?.split('@').first ?? 'User';
+  }
+
+  int _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  Future<void> _writeMessageAndChatPreviews({
+    required MessageModel message,
+    required String needTitle,
+    required String lastMessage,
+    required String currentUserPeerName,
+    String? offerId,
+    String? offerStatus,
+    bool? chatDisabled,
+    bool markDelivered = true,
+  }) async {
+    final channelId =
+        getChannelId(message.senderId, message.receiverId, message.needId);
+    final nowMillis = message.timestamp.millisecondsSinceEpoch;
+    final msgRef =
+        _db.child('chats').child(message.needId).child(channelId).push();
+
+    await msgRef.set(message.toMap());
+
+    final senderChatData = <String, Object?>{
+      'channelId': channelId,
+      'needId': message.needId,
+      'needTitle': needTitle,
+      'peerId': message.receiverId,
+      'peerName': message.receiverName,
+      'lastMessage': lastMessage,
+      'lastTimestamp': nowMillis,
+      'unreadCount': 0,
+      'iAmSender': true,
+      if (offerId != null) 'offerId': offerId,
+      if (offerStatus != null) 'offerStatus': offerStatus,
+      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    };
+
+    await _db
+        .child('user_chats')
+        .child(message.senderId)
+        .child(channelId)
+        .update(senderChatData);
+
+    final receiverChatRef =
+        _db.child('user_chats').child(message.receiverId).child(channelId);
+    final unreadSnap = await receiverChatRef.child('unreadCount').get();
+    final currentUnread = _asInt(unreadSnap.value);
+
+    final receiverChatData = <String, Object?>{
+      'channelId': channelId,
+      'needId': message.needId,
+      'needTitle': needTitle,
+      'peerId': message.senderId,
+      'peerName': currentUserPeerName,
+      'lastMessage': lastMessage,
+      'lastTimestamp': nowMillis,
+      'unreadCount': currentUnread + 1,
+      'iAmSender': false,
+      if (offerId != null) 'offerId': offerId,
+      if (offerStatus != null) 'offerStatus': offerStatus,
+      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    };
+
+    await receiverChatRef.update(receiverChatData);
+
+    if (markDelivered) {
+      await msgRef.child('status').set('delivered');
+    }
   }
 
   Future<void> sendMessage({
@@ -26,16 +109,13 @@ class ChatService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final senderId = user.uid;
-    final senderName =
-        user.displayName ?? user.email?.split('@').first ?? 'User';
-    final channelId = getChannelId(senderId, receiverId, needId);
+    final senderName = _userName(user);
     final nowMillis = DateTime.now().millisecondsSinceEpoch;
-    final lastMessage = type == 'text' ? content : 'Offer';
+    final lastMessage = type == 'text' ? content : content.split('\n').first;
 
     final message = MessageModel(
       id: '',
-      senderId: senderId,
+      senderId: user.uid,
       senderName: senderName,
       receiverId: receiverId,
       receiverName: receiverName,
@@ -47,53 +127,15 @@ class ChatService {
       mediaUrl: mediaUrl,
     );
 
-    final msgRef = _db.child('chats').child(needId).child(channelId).push();
-    await msgRef.set(message.toMap());
-
-    final senderChatData = <String, Object?>{
-      'channelId': channelId,
-      'needId': needId,
-      'needTitle': needTitle,
-      'peerId': receiverId,
-      'peerName': receiverName,
-      'lastMessage': lastMessage,
-      'lastTimestamp': nowMillis,
-      'unreadCount': 0,
-      'iAmSender': true,
-      if (offerId != null) 'offerId': offerId,
-      if (offerStatus != null) 'offerStatus': offerStatus,
-      if (chatDisabled != null) 'chatDisabled': chatDisabled,
-    };
-
-    await _db
-        .child('user_chats')
-        .child(senderId)
-        .child(channelId)
-        .update(senderChatData);
-
-    final receiverChatRef =
-        _db.child('user_chats').child(receiverId).child(channelId);
-
-    final snap = await receiverChatRef.child('unreadCount').get();
-    final currentUnread = snap.exists ? (snap.value as int? ?? 0) : 0;
-
-    final receiverChatData = <String, Object?>{
-      'channelId': channelId,
-      'needId': needId,
-      'needTitle': needTitle,
-      'peerId': senderId,
-      'peerName': senderName,
-      'lastMessage': lastMessage,
-      'lastTimestamp': nowMillis,
-      'unreadCount': currentUnread + 1,
-      'iAmSender': false,
-      if (offerId != null) 'offerId': offerId,
-      if (offerStatus != null) 'offerStatus': offerStatus,
-      if (chatDisabled != null) 'chatDisabled': chatDisabled,
-    };
-
-    await receiverChatRef.update(receiverChatData);
-    await msgRef.child('status').set('delivered');
+    await _writeMessageAndChatPreviews(
+      message: message,
+      needTitle: needTitle,
+      lastMessage: lastMessage,
+      currentUserPeerName: senderName,
+      offerId: offerId,
+      offerStatus: offerStatus,
+      chatDisabled: chatDisabled,
+    );
   }
 
   Future<void> sendSystemMessage({
@@ -109,15 +151,12 @@ class ChatService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final senderId = user.uid;
-    final currentUserName =
-        user.displayName ?? user.email?.split('@').first ?? 'User';
-    final channelId = getChannelId(senderId, receiverId, needId);
+    final currentUserName = _userName(user);
     final nowMillis = DateTime.now().millisecondsSinceEpoch;
 
     final message = MessageModel(
       id: '',
-      senderId: senderId,
+      senderId: user.uid,
       senderName: 'System',
       receiverId: receiverId,
       receiverName: receiverName,
@@ -126,55 +165,155 @@ class ChatService {
       type: 'system',
       timestamp: DateTime.fromMillisecondsSinceEpoch(nowMillis),
       status: 'sent',
-      mediaUrl: null,
     );
 
-    final msgRef = _db.child('chats').child(needId).child(channelId).push();
-    await msgRef.set(message.toMap());
+    await _writeMessageAndChatPreviews(
+      message: message,
+      needTitle: needTitle,
+      lastMessage: content,
+      currentUserPeerName: currentUserName,
+      offerId: offerId,
+      offerStatus: offerStatus,
+      chatDisabled: chatDisabled,
+      markDelivered: false,
+    );
+  }
 
-    final senderChatData = <String, Object?>{
-      'channelId': channelId,
-      'needId': needId,
-      'needTitle': needTitle,
-      'peerId': receiverId,
-      'peerName': receiverName,
-      'lastMessage': content,
-      'lastTimestamp': nowMillis,
-      'unreadCount': 0,
-      'iAmSender': true,
-      if (offerId != null) 'offerId': offerId,
-      if (offerStatus != null) 'offerStatus': offerStatus,
-      if (chatDisabled != null) 'chatDisabled': chatDisabled,
-    };
-
-    await _db
-        .child('user_chats')
-        .child(senderId)
+  Future<String> uploadVoiceMessage({
+    required String needId,
+    required String channelId,
+    required File audioFile,
+  }) async {
+    final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final ref = _storage
+        .ref()
+        .child('chats')
+        .child(needId)
         .child(channelId)
-        .update(senderChatData);
+        .child(fileName);
 
-    final receiverChatRef =
-        _db.child('user_chats').child(receiverId).child(channelId);
+    await ref.putFile(audioFile);
+    return ref.getDownloadURL();
+  }
 
-    final snap = await receiverChatRef.child('unreadCount').get();
-    final currentUnread = snap.exists ? (snap.value as int? ?? 0) : 0;
+  Future<void> sendVoiceMessage({
+    required String receiverId,
+    required String receiverName,
+    required String needId,
+    required String needTitle,
+    required File audioFile,
+    int durationSeconds = 0,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    final receiverChatData = <String, Object?>{
-      'channelId': channelId,
-      'needId': needId,
-      'needTitle': needTitle,
-      'peerId': senderId,
-      'peerName': currentUserName,
-      'lastMessage': content,
-      'lastTimestamp': nowMillis,
-      'unreadCount': currentUnread + 1,
-      'iAmSender': false,
-      if (offerId != null) 'offerId': offerId,
-      if (offerStatus != null) 'offerStatus': offerStatus,
-      if (chatDisabled != null) 'chatDisabled': chatDisabled,
+    final senderName = _userName(user);
+    final channelId = getChannelId(user.uid, receiverId, needId);
+    final nowMillis = DateTime.now().millisecondsSinceEpoch;
+    final downloadUrl = await uploadVoiceMessage(
+      needId: needId,
+      channelId: channelId,
+      audioFile: audioFile,
+    );
+
+    final message = MessageModel(
+      id: '',
+      senderId: user.uid,
+      senderName: senderName,
+      receiverId: receiverId,
+      receiverName: receiverName,
+      needId: needId,
+      content: 'Voice message',
+      type: 'voice',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(nowMillis),
+      status: 'sent',
+      mediaUrl: downloadUrl,
+      duration: durationSeconds > 0 ? durationSeconds : 1,
+    );
+
+    await _writeMessageAndChatPreviews(
+      message: message,
+      needTitle: needTitle,
+      lastMessage: 'Voice message',
+      currentUserPeerName: senderName,
+    );
+  }
+
+  Future<String> uploadFile({
+    required String needId,
+    required String channelId,
+    required File file,
+    required String type,
+  }) async {
+    final parts = file.path.split(RegExp(r'[\\/]'));
+    final originalName = parts.isEmpty ? 'file' : parts.last;
+    final extension =
+        originalName.contains('.') ? originalName.split('.').last : 'bin';
+    final fileName =
+        '${type}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final ref = _storage
+        .ref()
+        .child('chats')
+        .child(needId)
+        .child(channelId)
+        .child(fileName);
+
+    await ref.putFile(file);
+    return ref.getDownloadURL();
+  }
+
+  Future<void> sendFileMessage({
+    required String receiverId,
+    required String receiverName,
+    required String needId,
+    required String needTitle,
+    required File file,
+    required String type,
+    String? fileName,
+    int? fileSize,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final senderName = _userName(user);
+    final channelId = getChannelId(user.uid, receiverId, needId);
+    final nowMillis = DateTime.now().millisecondsSinceEpoch;
+    final downloadUrl = await uploadFile(
+      needId: needId,
+      channelId: channelId,
+      file: file,
+      type: type,
+    );
+
+    final label = switch (type) {
+      'image' => 'Image',
+      'video' => fileName ?? 'Video',
+      'document' => fileName ?? 'Document',
+      _ => fileName ?? 'File',
     };
 
-    await receiverChatRef.update(receiverChatData);
+    final message = MessageModel(
+      id: '',
+      senderId: user.uid,
+      senderName: senderName,
+      receiverId: receiverId,
+      receiverName: receiverName,
+      needId: needId,
+      content: label,
+      type: type,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(nowMillis),
+      status: 'sent',
+      mediaUrl: downloadUrl,
+      fileName: fileName,
+      fileSize: fileSize,
+    );
+
+    await _writeMessageAndChatPreviews(
+      message: message,
+      needTitle: needTitle,
+      lastMessage: label,
+      currentUserPeerName: senderName,
+    );
   }
 
   Stream<OfferModel?> watchOfferForChat({
@@ -186,7 +325,7 @@ class ChatService {
 
     return _db.child('offers').child(needId).onValue.map((event) {
       final offers = <OfferModel>[];
-      if (event.snapshot.value != null) {
+      if (event.snapshot.value is Map) {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         data.forEach((key, value) {
           if (value is! Map) return;
@@ -265,12 +404,17 @@ class ChatService {
         .orderByChild('timestamp')
         .onValue
         .map((event) {
-      final List<MessageModel> messages = [];
-      if (event.snapshot.value != null) {
+      final messages = <MessageModel>[];
+      if (event.snapshot.value is Map) {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         data.forEach((key, value) {
-          messages.add(MessageModel.fromMap(
-              key, Map<String, dynamic>.from(value as Map)));
+          if (value is! Map) return;
+          messages.add(
+            MessageModel.fromMap(
+              key.toString(),
+              Map<String, dynamic>.from(value),
+            ),
+          );
         });
         messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       }
@@ -283,19 +427,21 @@ class ChatService {
     required String otherUserId,
   }) async {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final channelId = getChannelId(currentUserId, otherUserId, needId);
+    if (currentUserId.isEmpty) return;
 
+    final channelId = getChannelId(currentUserId, otherUserId, needId);
     final chatRef = _db.child('chats').child(needId).child(channelId);
     final snap = await chatRef.get();
 
-    if (snap.exists) {
+    if (snap.value is Map) {
       final data = snap.value as Map<dynamic, dynamic>;
-      data.forEach((key, value) {
-        final msg = Map<String, dynamic>.from(value as Map);
+      for (final entry in data.entries) {
+        if (entry.value is! Map) continue;
+        final msg = Map<String, dynamic>.from(entry.value as Map);
         if (msg['receiverId'] == currentUserId && msg['status'] != 'seen') {
-          chatRef.child(key).child('status').set('seen');
+          await chatRef.child(entry.key.toString()).child('status').set('seen');
         }
-      });
+      }
     }
 
     await _db
@@ -311,19 +457,21 @@ class ChatService {
     bool acceptedOnly = false,
   }) {
     return _db.child('user_chats').child(userId).onValue.map((event) {
-      final List<Map<String, dynamic>> chats = [];
-      if (event.snapshot.value != null) {
+      final chats = <Map<String, dynamic>>[];
+      if (event.snapshot.value is Map) {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
         data.forEach((channelId, value) {
-          final chat = Map<String, dynamic>.from(value as Map);
-          if (acceptedOnly && chat['offerStatus'] != 'accepted') {
-            return;
-          }
+          if (value is! Map) return;
+          final chat = Map<String, dynamic>.from(value);
+          if (acceptedOnly && chat['offerStatus'] != 'accepted') return;
           chat['channelId'] = channelId.toString();
           chats.add(chat);
         });
-        chats.sort((a, b) => ((b['lastTimestamp'] ?? 0) as int)
-            .compareTo((a['lastTimestamp'] ?? 0) as int));
+        chats.sort((a, b) {
+          final bTime = _asInt(b['lastTimestamp']);
+          final aTime = _asInt(a['lastTimestamp']);
+          return bTime.compareTo(aTime);
+        });
       }
       return chats;
     });
@@ -331,11 +479,66 @@ class ChatService {
 
   Future<Map<String, dynamic>?> getNeedDetails(String needId) async {
     try {
-      final snap = await _db.child('needs').child(needId).get();
-      if (snap.exists) {
-        return Map<String, dynamic>.from(snap.value as Map);
+      final directSnap = await _db.child('needs').child(needId).get();
+      if (directSnap.value is Map) {
+        final need = Map<String, dynamic>.from(directSnap.value as Map);
+        need['id'] = needId;
+        return need;
       }
-    } catch (_) {}
+
+      final querySnap =
+          await _db.child('needs').orderByChild('id').equalTo(needId).get();
+      if (querySnap.value is Map) {
+        final data = querySnap.value as Map<dynamic, dynamic>;
+        for (final entry in data.entries) {
+          if (entry.value is! Map) continue;
+          final need = Map<String, dynamic>.from(entry.value as Map);
+          need['id'] = entry.key.toString();
+          return need;
+        }
+      }
+    } catch (_) {
+      return null;
+    }
     return null;
+  }
+
+  Future<void> deleteChatForUser({
+    required String needId,
+    required String otherUserId,
+  }) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (currentUserId.isEmpty) return;
+
+    final channelId = getChannelId(currentUserId, otherUserId, needId);
+    await _db
+        .child('user_chats')
+        .child(currentUserId)
+        .child(channelId)
+        .remove();
+  }
+
+  Future<OfferModel?> getOfferForChat({
+    required String needId,
+    required String otherUserId,
+  }) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final sellerCandidates = {currentUserId, otherUserId};
+    final snap = await _db.child('offers').child(needId).get();
+    if (snap.value is! Map) return null;
+
+    final offers = <OfferModel>[];
+    final data = snap.value as Map<dynamic, dynamic>;
+    data.forEach((key, value) {
+      if (value is! Map) return;
+      final offerMap = Map<String, dynamic>.from(value);
+      if (sellerCandidates.contains(offerMap['sellerId'])) {
+        offers.add(OfferModel.fromMap(key.toString(), offerMap));
+      }
+    });
+
+    if (offers.isEmpty) return null;
+    offers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return offers.first;
   }
 }

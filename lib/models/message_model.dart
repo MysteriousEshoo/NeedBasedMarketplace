@@ -6,10 +6,14 @@ class MessageModel {
   final String receiverName;
   final String needId;
   final String content;
-  final String type;
+  final String
+      type; // 'text', 'offer', 'system', 'voice', 'image', 'video', 'document'
   final DateTime timestamp;
-  final String status;
+  final String status; // 'sent', 'delivered', 'seen'
   final String? mediaUrl;
+  final int? duration; // Voice duration in seconds
+  final String? fileName;
+  final int? fileSize;
 
   MessageModel({
     required this.id,
@@ -23,6 +27,9 @@ class MessageModel {
     required this.timestamp,
     this.status = 'sent',
     this.mediaUrl,
+    this.duration,
+    this.fileName,
+    this.fileSize,
   });
 
   Map<String, dynamic> toMap() {
@@ -37,6 +44,9 @@ class MessageModel {
       'timestamp': timestamp.millisecondsSinceEpoch,
       'status': status,
       if (mediaUrl != null) 'mediaUrl': mediaUrl,
+      if (duration != null) 'duration': duration,
+      if (fileName != null) 'fileName': fileName,
+      if (fileSize != null) 'fileSize': fileSize,
     };
   }
 
@@ -55,6 +65,9 @@ class MessageModel {
           : DateTime.now(),
       status: map['status'] ?? 'sent',
       mediaUrl: map['mediaUrl'],
+      duration: map['duration'],
+      fileName: map['fileName'],
+      fileSize: map['fileSize'],
     );
   }
 

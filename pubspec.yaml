@@ -14,34 +14,29 @@ dependencies:
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
   
-  # Firebase Core (Required for all Firebase services)
+  # Firebase
   firebase_core: ^3.3.0
-  
-  # Firebase Authentication (Login ke liye)
   firebase_auth: ^5.1.0
-  
-  # Firebase Realtime Database (Data save karne ke liye)
   firebase_database: ^11.1.0
-  
-  # Cloud Firestore (Alternative database - optional)
-  cloud_firestore: ^5.6.5  # ✅ ADD THIS
-  
-  # Image Picker (Profile picture ke liye)
-  image_picker: ^1.2.2
-  
-  uuid: ^4.3.3
-  # ✨ NEW DEPENDENCIES - ADD THESE:
-  
-  # State Management (Theme toggle ke liye)
-  provider: ^6.1.2
-  
-  # Local Storage (Theme preference save karne ke liye)
-  shared_preferences: ^2.3.5
-  
-  # URL Launcher (Help screen mein phone/email/whatsapp open karne ke liye)
-  url_launcher: ^6.3.1
-  google_sign_in: ^6.2.2  # ✅ ADD THIS
+  cloud_firestore: ^5.6.5
   firebase_storage: ^12.4.10
+  
+  # Auth
+  google_sign_in: ^6.2.2
+  
+  # UI Helpers
+  image_picker: ^1.2.2
+  uuid: ^4.3.3
+  provider: ^6.1.2
+  shared_preferences: ^2.3.5
+  url_launcher: ^6.3.1
+  
+  # ✅ NEW: Voice & File Features
+  record: ^6.2.1                 # Voice recording
+  audioplayers: ^6.7.1           # Play audio
+  file_picker: ^8.3.7            # File picker
+  permission_handler: ^12.0.3    # Permissions
+  agora_rtc_engine: ^6.5.4       # Voice calling
 
 dev_dependencies:
   flutter_lints: ^4.0.0

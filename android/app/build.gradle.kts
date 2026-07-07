@@ -1,11 +1,8 @@
-// android/app/build.gradle ke bilkul top par yeh paste karein:
-System.setProperty("java.home", System.getenv("JAVA_HOME") ?: "C:\\Program Files\\Android\\Android Studio\\jbr")
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    
+    id("com.google.gms.google-services")
 }
 
 android {
