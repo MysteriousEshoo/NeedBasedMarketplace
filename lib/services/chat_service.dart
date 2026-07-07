@@ -285,26 +285,15 @@ class ChatService {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final channelId = getChannelId(currentUserId, otherUserId, needId);
 
-    final snap = await _db
-        .child('chats')
-        .child(needId)
-        .child(channelId)
-        .orderByChild('receiverId')
-        .equalTo(currentUserId)
-        .get();
+    final chatRef = _db.child('chats').child(needId).child(channelId);
+    final snap = await chatRef.get();
 
     if (snap.exists) {
       final data = snap.value as Map<dynamic, dynamic>;
       data.forEach((key, value) {
         final msg = Map<String, dynamic>.from(value as Map);
-        if (msg['status'] != 'seen') {
-          _db
-              .child('chats')
-              .child(needId)
-              .child(channelId)
-              .child(key)
-              .child('status')
-              .set('seen');
+        if (msg['receiverId'] == currentUserId && msg['status'] != 'seen') {
+          chatRef.child(key).child('status').set('seen');
         }
       });
     }

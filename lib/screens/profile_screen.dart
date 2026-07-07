@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_database/firebase_database.dart' hide Query;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +15,7 @@ import 'help_screen.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/notification_provider.dart';
+import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -627,6 +629,389 @@ class _FullEnterpriseSettingsScreenState
     }
   }
 
+  Future<void> _confirmLogoutFromSession() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Logout?'),
+        content: const Text('You will return to the login screen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgentMedium,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true) return;
+
+    try {
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (_) => false,
+      );
+    } catch (e) {
+      _showCoreFeedback('Logout failed: ${e.toString()}');
+    }
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This permanently removes your profile, needs, offers, saved items, notifications, and chats from the app database.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgentHigh,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Delete Account',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showCoreFeedback('No active session found.');
+      return;
+    }
+
+    var progressShown = false;
+
+    try {
+      await _reauthenticateForAccountDeletion(user);
+      if (!mounted) return;
+
+      _showBlockingProgress('Deleting account...');
+      progressShown = true;
+
+      await _tryDeleteUserAppData(user.uid);
+      await user.delete();
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (_) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      if (progressShown) Navigator.of(context, rootNavigator: true).pop();
+      _showCoreFeedback(_friendlyAuthDeleteMessage(e));
+    } catch (e) {
+      if (!mounted) return;
+      if (progressShown) Navigator.of(context, rootNavigator: true).pop();
+      _showCoreFeedback(_friendlyDeleteError(e));
+    }
+  }
+
+  void _showBlockingProgress(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 16),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reauthenticateForAccountDeletion(User user) async {
+    final providerIds = user.providerData.map((p) => p.providerId).toSet();
+
+    if (providerIds.contains('password') && user.email != null) {
+      final password = await _requestPasswordForDelete();
+      if (password == null || password.isEmpty) {
+        throw FirebaseAuthException(
+          code: 'cancelled',
+          message: 'Account deletion cancelled.',
+        );
+      }
+
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+      return;
+    }
+
+    if (providerIds.contains('google.com')) {
+      final googleUser = await GoogleSignIn(scopes: ['email']).signIn();
+      if (googleUser == null) {
+        throw FirebaseAuthException(
+          code: 'cancelled',
+          message: 'Google confirmation was cancelled.',
+        );
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await user.reauthenticateWithCredential(credential);
+    }
+  }
+
+  Future<String?> _requestPasswordForDelete() async {
+    final controller = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm password'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Current password',
+            prefixIcon: Icon(Icons.lock_rounded),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgentHigh,
+            ),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return password;
+  }
+
+  // ✅ FIXED: Added async keyword
+  Future<void> _tryDeleteUserAppData(String uid) async {
+    try {
+      await _deleteUserAppData(uid);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteUserAppData(String uid) async {
+    final db = FirebaseDatabase.instance.ref();
+    final firestore = FirebaseFirestore.instance;
+    final ownNeedIds = <String>{};
+
+    final needsSnapshot = await db.child('needs').get();
+    if (needsSnapshot.exists && needsSnapshot.value is Map) {
+      final needsMap = needsSnapshot.value as Map<dynamic, dynamic>;
+      needsMap.forEach((key, value) {
+        if (value is! Map) return;
+        final data = Map<String, dynamic>.from(value);
+        if (data['authorId'] == uid || data['userId'] == uid) {
+          final needId = key.toString();
+          ownNeedIds.add(needId);
+        }
+      });
+    }
+
+    for (final needId in ownNeedIds) {
+      await _tryRealtimeRemove(db.child('needs').child(needId));
+      await _tryRealtimeRemove(db.child('offers').child(needId));
+      await _tryRealtimeRemove(db.child('chats').child(needId));
+    }
+
+    final userChatsSnapshot = await db.child('user_chats').child(uid).get();
+    if (userChatsSnapshot.exists && userChatsSnapshot.value is Map) {
+      final userChats = userChatsSnapshot.value as Map<dynamic, dynamic>;
+      for (final entry in userChats.entries) {
+        final channelKey = entry.key;
+        final value = entry.value;
+        if (value is! Map) continue;
+        final chat = Map<String, dynamic>.from(value);
+        final channelId = channelKey.toString();
+        final needId = chat['needId']?.toString();
+        final peerId = chat['peerId']?.toString();
+
+        if (needId != null &&
+            needId.isNotEmpty &&
+            !ownNeedIds.contains(needId)) {
+          await _tryRealtimeRemove(
+            db.child('chats').child(needId).child(channelId),
+          );
+        }
+        if (peerId != null && peerId.isNotEmpty) {
+          await _tryRealtimeRemove(
+            db.child('user_chats').child(peerId).child(channelId),
+          );
+        }
+      }
+    }
+
+    final offersSnapshot = await db.child('offers').get();
+    if (offersSnapshot.exists && offersSnapshot.value is Map) {
+      final offersByNeed = offersSnapshot.value as Map<dynamic, dynamic>;
+      for (final needEntry in offersByNeed.entries) {
+        final needKey = needEntry.key;
+        final value = needEntry.value;
+        if (value is! Map) continue;
+        final needId = needKey.toString();
+        if (ownNeedIds.contains(needId)) continue;
+
+        final offers = value as Map<dynamic, dynamic>;
+        for (final offerEntry in offers.entries) {
+          final offerKey = offerEntry.key;
+          final offerValue = offerEntry.value;
+          if (offerValue is! Map) continue;
+          final offer = Map<String, dynamic>.from(offerValue);
+          if (offer['sellerId'] == uid) {
+            await _tryRealtimeRemove(
+              db.child('offers').child(needId).child(offerKey.toString()),
+            );
+          }
+        }
+      }
+    }
+
+    final savedNeedsSnapshot = await db.child('users_saved_needs').get();
+    if (savedNeedsSnapshot.exists && savedNeedsSnapshot.value is Map) {
+      final savedByUser = savedNeedsSnapshot.value as Map<dynamic, dynamic>;
+      // ✅ FIXED: Using for loop instead of forEach
+      for (final entry in savedByUser.entries) {
+        if (entry.value is! Map) continue;
+        final savedUserId = entry.key.toString();
+        for (final needId in ownNeedIds) {
+          await _tryRealtimeRemove(
+            db.child('users_saved_needs').child(savedUserId).child(needId),
+          );
+        }
+      }
+    }
+
+    await _tryRealtimeRemove(db.child('notifications').child(uid));
+    await _tryRealtimeRemove(db.child('user_chats').child(uid));
+    await _tryRealtimeRemove(db.child('user_settings').child(uid));
+    await _tryRealtimeRemove(db.child('users_saved_needs').child(uid));
+
+    await _deleteFirestoreQuery(
+      firestore.collection('needs').where('userId', isEqualTo: uid),
+    );
+    await _deleteFirestoreQuery(
+      firestore.collection('needs').where('authorId', isEqualTo: uid),
+    );
+    await _deleteFirestoreQuery(
+      firestore.collection('offers').where('sellerId', isEqualTo: uid),
+    );
+    for (final needId in ownNeedIds) {
+      await _deleteFirestoreQuery(
+        firestore.collection('offers').where('needId', isEqualTo: needId),
+      );
+    }
+    await _deleteFirestoreCollection(
+      firestore.collection('users').doc(uid).collection('notifications'),
+    );
+    await _tryFirestoreDelete(firestore.collection('users').doc(uid));
+  }
+
+  Future<void> _tryRealtimeRemove(DatabaseReference ref) async {
+    try {
+      await ref.remove();
+    } catch (_) {}
+  }
+
+  Future<void> _tryFirestoreDelete(DocumentReference ref) async {
+    try {
+      await ref.delete();
+    } catch (_) {}
+  }
+
+  Future<void> _deleteFirestoreCollection(
+    CollectionReference<Map<String, dynamic>> collection,
+  ) async {
+    while (true) {
+      final snapshot = await collection.limit(400).get();
+      if (snapshot.docs.isEmpty) return;
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+  }
+
+  // ✅ FIXED: Added async keyword
+  Future<void> _deleteFirestoreQuery(
+    Query<Map<String, dynamic>> query,
+  ) async {
+    while (true) {
+      final snapshot = await query.limit(400).get();
+      if (snapshot.docs.isEmpty) return;
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+  }
+
+  String _friendlyAuthDeleteMessage(FirebaseAuthException e) {
+    if (e.code == 'cancelled') {
+      return e.message ?? 'Account deletion cancelled.';
+    }
+    if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+      return 'Password confirmation failed.';
+    }
+    if (e.code == 'requires-recent-login') {
+      return 'Please login again, then delete your account from settings.';
+    }
+    return 'Account deletion failed: ${e.message ?? e.code}';
+  }
+
+  String _friendlyDeleteError(Object e) {
+    final message = e.toString();
+    if (message.contains('google_sign_in_web') ||
+        message.contains('appClientId') ||
+        message.contains('ClientID not set')) {
+      return 'Google account confirmation is not configured for web. Try deleting after logging in with email/password, or add a Google web client ID.';
+    }
+    return 'Account deletion failed: $message';
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -896,7 +1281,14 @@ class _FullEnterpriseSettingsScreenState
               'Logout from Session',
               'Disconnect current active user authentication tokens',
               Icons.power_settings_new_rounded,
-              AppColors.urgentMedium),
+              AppColors.urgentMedium,
+              onTap: _confirmLogoutFromSession),
+          _buildActionItem(
+              'Delete Account',
+              'Permanently remove your profile and marketplace data',
+              Icons.delete_forever_rounded,
+              AppColors.urgentHigh,
+              onTap: _confirmDeleteAccount),
         ],
       ),
     );
@@ -1483,7 +1875,12 @@ class _FullEnterpriseSettingsScreenState
   }
 
   Widget _buildActionItem(
-      String title, String sub, IconData icon, Color color) {
+    String title,
+    String sub,
+    IconData icon,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -1498,14 +1895,7 @@ class _FullEnterpriseSettingsScreenState
         subtitle: Text(sub,
             style:
                 const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-        onTap: () {
-          if (icon == Icons.power_settings_new_rounded) {
-            FirebaseAuth.instance.signOut();
-            Navigator.pop(context);
-          } else {
-            _showComingSoon(title);
-          }
-        },
+        onTap: onTap ?? () => _showComingSoon(title),
       ),
     );
   }
