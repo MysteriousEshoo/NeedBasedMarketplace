@@ -28,6 +28,94 @@ class ChatService {
     return 0;
   }
 
+  String _safePathSegment(String value) {
+    return value.replaceAll(RegExp(r'[.#$\[\]/]'), '_');
+  }
+
+  String _fileExtension(String path) {
+    final name = path.split(RegExp(r'[\\/]')).last;
+    if (!name.contains('.')) return '';
+    return name.split('.').last.toLowerCase();
+  }
+
+  String _contentTypeFor(String type, String path) {
+    final ext = _fileExtension(path);
+    if (type == 'voice') return 'audio/mp4';
+    if (type == 'image') {
+      return switch (ext) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        _ => 'image/jpeg',
+      };
+    }
+    if (type == 'video') return 'video/mp4';
+    return switch (ext) {
+      'pdf' => 'application/pdf',
+      'doc' => 'application/msword',
+      'docx' =>
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xlsx' =>
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt' => 'application/vnd.ms-powerpoint',
+      'txt' => 'text/plain',
+      'zip' => 'application/zip',
+      _ => 'application/octet-stream',
+    };
+  }
+
+  Future<void> _waitForUploadableFile(File file) async {
+    for (var attempt = 0; attempt < 8; attempt++) {
+      if (await file.exists()) {
+        final length = await file.length();
+        if (length > 0) return;
+      }
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+
+    throw Exception('Selected media file is empty or not ready yet.');
+  }
+
+  Future<String> _downloadUrlWithRetry(Reference ref) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await ref.getDownloadURL();
+      } catch (e) {
+        lastError = e;
+        await Future.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+      }
+    }
+    throw Exception('Could not get uploaded media URL: $lastError');
+  }
+
+  Future<String> _uploadChatMedia({
+    required String needId,
+    required String channelId,
+    required File file,
+    required String type,
+    required String storageFileName,
+  }) async {
+    await _waitForUploadableFile(file);
+
+    final ref = _storage
+        .ref()
+        .child('chats')
+        .child(_safePathSegment(needId))
+        .child(_safePathSegment(channelId))
+        .child(storageFileName);
+    final snapshot = await ref.putFile(
+      file,
+      SettableMetadata(contentType: _contentTypeFor(type, file.path)),
+    );
+
+    if (snapshot.bytesTransferred <= 0) {
+      throw Exception('Firebase Storage upload did not transfer any bytes.');
+    }
+
+    return _downloadUrlWithRetry(snapshot.ref);
+  }
+
   Future<void> _writeMessageAndChatPreviews({
     required MessageModel message,
     required String needTitle,
@@ -185,15 +273,13 @@ class ChatService {
     required File audioFile,
   }) async {
     final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    final ref = _storage
-        .ref()
-        .child('chats')
-        .child(needId)
-        .child(channelId)
-        .child(fileName);
-
-    await ref.putFile(audioFile);
-    return ref.getDownloadURL();
+    return _uploadChatMedia(
+      needId: needId,
+      channelId: channelId,
+      file: audioFile,
+      type: 'voice',
+      storageFileName: fileName,
+    );
   }
 
   Future<void> sendVoiceMessage({
@@ -251,15 +337,13 @@ class ChatService {
         originalName.contains('.') ? originalName.split('.').last : 'bin';
     final fileName =
         '${type}_${DateTime.now().millisecondsSinceEpoch}.$extension';
-    final ref = _storage
-        .ref()
-        .child('chats')
-        .child(needId)
-        .child(channelId)
-        .child(fileName);
-
-    await ref.putFile(file);
-    return ref.getDownloadURL();
+    return _uploadChatMedia(
+      needId: needId,
+      channelId: channelId,
+      file: file,
+      type: type,
+      storageFileName: fileName,
+    );
   }
 
   Future<void> sendFileMessage({
