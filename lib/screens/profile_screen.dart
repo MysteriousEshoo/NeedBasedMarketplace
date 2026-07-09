@@ -13,11 +13,8 @@ import 'need_detail_screen.dart';
 import 'payment_methods_screen.dart';
 import 'help_screen.dart';
 import '../providers/theme_provider.dart';
-import '../providers/settings_provider.dart';
 import '../providers/notification_provider.dart';
-import '../providers/seller_request_provider.dart';
-import '../models/seller_request_model.dart';
-import 'seller_registration_sheet.dart';
+import 'marketplace_mode_screen.dart';
 import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -315,6 +312,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'label': 'Settings Console',
             'page': const _FullEnterpriseSettingsScreen()
           },
+          {
+            'icon': Icons.swap_horiz_rounded,
+            'label': 'Switch to Seller / Buyer Mode',
+            'page': const MarketplaceModeScreen()
+          },
         ]
       }
     ];
@@ -508,38 +510,12 @@ class _FullEnterpriseSettingsScreenState
   bool _pushNotifications = true;
   bool _fingerprintEnabled = false;
   bool _faceIdEnabled = false;
-  bool _isSellerMode = false;
   bool _notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSellerMode();
     _loadNotificationSettings();
-  }
-
-  void _loadSellerMode() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get()
-        .then((doc) {
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        if (mounted) {
-          setState(() {
-            _isSellerMode = data['isSellerMode'] ?? false;
-          });
-        }
-      } else {
-        _createUserDocument(user);
-      }
-    }).catchError((e) {
-      print('Error loading seller mode: $e');
-    });
   }
 
   void _loadNotificationSettings() {
@@ -561,152 +537,6 @@ class _FullEnterpriseSettingsScreenState
         }
       }
     });
-  }
-
-  Future<void> _createUserDocument(User user) async {
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'uid': user.uid,
-        'name': user.displayName ?? 'User',
-        'email': user.email ?? '',
-        'isSellerMode': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      print('Error creating user document: $e');
-    }
-  }
-
-  Future<void> _toggleSellerMode(bool value) async {
-    setState(() => _isSellerMode = value);
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      final docRef =
-          FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final docSnapshot = await docRef.get();
-
-      if (docSnapshot.exists) {
-        await docRef.update({
-          'isSellerMode': value,
-        });
-      } else {
-        await docRef.set({
-          'uid': user.uid,
-          'name': user.displayName ?? 'User',
-          'email': user.email ?? '',
-          'isSellerMode': value,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      _showCoreFeedback(
-          value ? '🔵 Seller Mode activated!' : '🟢 Buyer Mode activated!');
-    } catch (e) {
-      setState(() => _isSellerMode = !value);
-      _showCoreFeedback('Error updating mode: ${e.toString()}');
-    }
-  }
-
-  // --------------------------------------------------------------------------
-  // Seller registration + approval gating
-  // --------------------------------------------------------------------------
-
-  String _sellerModeSubtitle(SellerRequestStatus status) {
-    switch (status) {
-      case SellerRequestStatus.approved:
-        return _isSellerMode
-            ? 'You can view all needs and submit offers'
-            : 'Approved — turn on to start selling';
-      case SellerRequestStatus.pending:
-        return 'Your seller request is pending approval';
-      case SellerRequestStatus.rejected:
-        return 'Request rejected. Tap the switch to re-apply';
-      case SellerRequestStatus.none:
-        return 'Register as a seller to submit offers';
-    }
-  }
-
-  Future<void> _handleSellerModeToggle(
-    bool value,
-    SellerRequestStatus status,
-    SettingsProvider settingsProvider,
-  ) async {
-    // Turning Seller Mode OFF is always allowed.
-    if (!value) {
-      await _toggleSellerMode(false);
-      return;
-    }
-
-    // Turning it ON requires an approved seller request.
-    switch (status) {
-      case SellerRequestStatus.approved:
-        await _toggleSellerMode(true);
-        await settingsProvider.setBuyerMode(false);
-        break;
-      case SellerRequestStatus.pending:
-        _showCoreFeedback(
-            '⏳ Your seller request is still pending approval.');
-        break;
-      case SellerRequestStatus.rejected:
-      case SellerRequestStatus.none:
-        await _openSellerRegistration();
-        break;
-    }
-  }
-
-  Future<void> _openSellerRegistration() async {
-    final submitted = await showSellerRegistrationSheet(context);
-    if (submitted == true && mounted) {
-      _showCoreFeedback(
-          '📨 Request sent! We\'ll notify you once it is reviewed.');
-    }
-  }
-
-  Widget _buildSellerStatusBanner(
-      SellerRequestStatus status, Color subTextColor) {
-    late final IconData icon;
-    late final Color color;
-    late final String label;
-
-    switch (status) {
-      case SellerRequestStatus.pending:
-        icon = Icons.hourglass_top_rounded;
-        color = AppColors.urgentMedium;
-        label = 'Pending approval';
-        break;
-      case SellerRequestStatus.rejected:
-        icon = Icons.cancel_rounded;
-        color = AppColors.urgentHigh;
-        label = 'Rejected — tap switch to re-apply';
-        break;
-      case SellerRequestStatus.none:
-        icon = Icons.storefront_rounded;
-        color = AppColors.primaryLight;
-        label = 'Not registered as a seller';
-        break;
-      case SellerRequestStatus.approved:
-        return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _toggleNotifications(bool value) async {
@@ -1119,12 +949,6 @@ class _FullEnterpriseSettingsScreenState
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bool isDarkMode = themeProvider.isDarkMode;
 
-    final settingsProvider = Provider.of<SettingsProvider>(context);
-    final bool isBuyerMode = settingsProvider.isBuyerMode;
-
-    final sellerRequestProvider = Provider.of<SellerRequestProvider>(context);
-    final SellerRequestStatus sellerStatus = sellerRequestProvider.status;
-
     final Color currentBg =
         isDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
     final Color currentSurface = isDarkMode ? AppColors.surface : Colors.white;
@@ -1300,58 +1124,6 @@ class _FullEnterpriseSettingsScreenState
                   MaterialPageRoute(
                       builder: (_) => const PaymentMethodsScreen()),
                 );
-              },
-            ),
-          ),
-          _buildSectionHeader('📦 MARKETPLACE SETTINGS'),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  activeColor: AppColors.primaryLight,
-                  title: Text('Seller Mode',
-                      style: TextStyle(
-                          color: currentText,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                  subtitle: Text(
-                      _sellerModeSubtitle(sellerStatus),
-                      style: TextStyle(color: currentSubText, fontSize: 11)),
-                  value: _isSellerMode && sellerStatus == SellerRequestStatus.approved,
-                  onChanged: (value) =>
-                      _handleSellerModeToggle(value, sellerStatus, settingsProvider),
-                ),
-                if (sellerStatus != SellerRequestStatus.approved)
-                  _buildSellerStatusBanner(sellerStatus, currentSubText),
-              ],
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Buyer / Customer Mode',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text('Toggle client consumer search panel',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: isBuyerMode,
-              onChanged: (value) async {
-                await settingsProvider.toggleBuyerMode();
-                if (value) {
-                  await _toggleSellerMode(false);
-                }
               },
             ),
           ),
