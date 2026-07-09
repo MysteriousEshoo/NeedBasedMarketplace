@@ -10,6 +10,7 @@ import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/seller_request_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => SellerRequestProvider()),
       ],
       child: const NeedMarketplaceApp(),
     ),

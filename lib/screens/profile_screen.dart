@@ -15,6 +15,9 @@ import 'help_screen.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/seller_request_provider.dart';
+import '../models/seller_request_model.dart';
+import 'seller_registration_sheet.dart';
 import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -607,6 +610,105 @@ class _FullEnterpriseSettingsScreenState
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Seller registration + approval gating
+  // --------------------------------------------------------------------------
+
+  String _sellerModeSubtitle(SellerRequestStatus status) {
+    switch (status) {
+      case SellerRequestStatus.approved:
+        return _isSellerMode
+            ? 'You can view all needs and submit offers'
+            : 'Approved — turn on to start selling';
+      case SellerRequestStatus.pending:
+        return 'Your seller request is pending approval';
+      case SellerRequestStatus.rejected:
+        return 'Request rejected. Tap the switch to re-apply';
+      case SellerRequestStatus.none:
+        return 'Register as a seller to submit offers';
+    }
+  }
+
+  Future<void> _handleSellerModeToggle(
+    bool value,
+    SellerRequestStatus status,
+    SettingsProvider settingsProvider,
+  ) async {
+    // Turning Seller Mode OFF is always allowed.
+    if (!value) {
+      await _toggleSellerMode(false);
+      return;
+    }
+
+    // Turning it ON requires an approved seller request.
+    switch (status) {
+      case SellerRequestStatus.approved:
+        await _toggleSellerMode(true);
+        await settingsProvider.setBuyerMode(false);
+        break;
+      case SellerRequestStatus.pending:
+        _showCoreFeedback(
+            '⏳ Your seller request is still pending approval.');
+        break;
+      case SellerRequestStatus.rejected:
+      case SellerRequestStatus.none:
+        await _openSellerRegistration();
+        break;
+    }
+  }
+
+  Future<void> _openSellerRegistration() async {
+    final submitted = await showSellerRegistrationSheet(context);
+    if (submitted == true && mounted) {
+      _showCoreFeedback(
+          '📨 Request sent! We\'ll notify you once it is reviewed.');
+    }
+  }
+
+  Widget _buildSellerStatusBanner(
+      SellerRequestStatus status, Color subTextColor) {
+    late final IconData icon;
+    late final Color color;
+    late final String label;
+
+    switch (status) {
+      case SellerRequestStatus.pending:
+        icon = Icons.hourglass_top_rounded;
+        color = AppColors.urgentMedium;
+        label = 'Pending approval';
+        break;
+      case SellerRequestStatus.rejected:
+        icon = Icons.cancel_rounded;
+        color = AppColors.urgentHigh;
+        label = 'Rejected — tap switch to re-apply';
+        break;
+      case SellerRequestStatus.none:
+        icon = Icons.storefront_rounded;
+        color = AppColors.primaryLight;
+        label = 'Not registered as a seller';
+        break;
+      case SellerRequestStatus.approved:
+        return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleNotifications(bool value) async {
     setState(() => _notificationsEnabled = value);
 
@@ -1020,6 +1122,9 @@ class _FullEnterpriseSettingsScreenState
     final settingsProvider = Provider.of<SettingsProvider>(context);
     final bool isBuyerMode = settingsProvider.isBuyerMode;
 
+    final sellerRequestProvider = Provider.of<SellerRequestProvider>(context);
+    final SellerRequestStatus sellerStatus = sellerRequestProvider.status;
+
     final Color currentBg =
         isDarkMode ? AppColors.background : const Color(0xFFF1F5F9);
     final Color currentSurface = isDarkMode ? AppColors.surface : Colors.white;
@@ -1205,25 +1310,25 @@ class _FullEnterpriseSettingsScreenState
                 color: currentSurface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Seller Mode',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text(
-                  _isSellerMode
-                      ? 'You can view all needs and submit offers'
-                      : 'You can only view your own needs',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _isSellerMode,
-              onChanged: (value) async {
-                await _toggleSellerMode(value);
-                if (value) {
-                  await settingsProvider.setBuyerMode(false);
-                }
-              },
+            child: Column(
+              children: [
+                SwitchListTile(
+                  activeColor: AppColors.primaryLight,
+                  title: Text('Seller Mode',
+                      style: TextStyle(
+                          color: currentText,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13)),
+                  subtitle: Text(
+                      _sellerModeSubtitle(sellerStatus),
+                      style: TextStyle(color: currentSubText, fontSize: 11)),
+                  value: _isSellerMode && sellerStatus == SellerRequestStatus.approved,
+                  onChanged: (value) =>
+                      _handleSellerModeToggle(value, sellerStatus, settingsProvider),
+                ),
+                if (sellerStatus != SellerRequestStatus.approved)
+                  _buildSellerStatusBanner(sellerStatus, currentSubText),
+              ],
             ),
           ),
           Container(

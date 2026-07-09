@@ -253,6 +253,8 @@ class _NotificationTile extends StatelessWidget {
         return Icons.local_offer_rounded;
       case 'message':
         return Icons.chat_bubble_rounded;
+      case 'seller':
+        return Icons.storefront_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -264,6 +266,8 @@ class _NotificationTile extends StatelessWidget {
         return AppColors.accent;
       case 'message':
         return AppColors.primary;
+      case 'seller':
+        return AppColors.primaryLight;
       default:
         return AppColors.urgentMedium;
     }
