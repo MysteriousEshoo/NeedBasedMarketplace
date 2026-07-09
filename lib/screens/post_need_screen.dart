@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../widgets/primary_loading_button.dart';
+import 'premium_screen.dart';
 
 class PostNeedScreen extends StatefulWidget {
   const PostNeedScreen({super.key});
@@ -18,6 +19,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
   final _pageController = PageController();
   int _currentStep = 0;
   bool _isPublishing = false;
+  DatabaseReference? _lastPostedNeedRef;
 
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -193,7 +195,9 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
 
       final DatabaseReference dbRef =
           FirebaseDatabase.instance.ref().child('needs');
-      await dbRef.push().set(needData);
+      final DatabaseReference newNeedRef = dbRef.push();
+      await newNeedRef.set(needData);
+      _lastPostedNeedRef = newNeedRef;
 
       if (!mounted) return;
       setState(() => _isPublishing = false);
@@ -308,16 +312,35 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
     );
   }
 
-  void _navigateToPremium() {
-    Navigator.pop(context);
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Premium Screen Coming Soon!'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
+  Future<void> _navigateToPremium() async {
+    final result = await Navigator.of(context).push<PremiumPurchaseResult>(
+      MaterialPageRoute(
+        builder: (_) => PremiumScreen(
+          needId: _lastPostedNeedRef?.key,
+          needTitle: _titleController.text.trim(),
+        ),
       ),
     );
+
+    if (!mounted) return;
+
+    if (result != null && _lastPostedNeedRef != null) {
+      try {
+        await _lastPostedNeedRef!.update(result.toNeedUpdate());
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Premium activated, but need update failed: $e'),
+            backgroundColor: AppColors.urgentHigh,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (mounted) Navigator.pop(context);
   }
 
   @override
