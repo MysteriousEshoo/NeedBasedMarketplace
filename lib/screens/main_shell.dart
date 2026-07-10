@@ -524,10 +524,29 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedScale(
-              scale: selected ? 1.1 : 1,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(icon, color: color, size: 24),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              // Selected item lifts up with a glowing halo for depth.
+              transform: Matrix4.translationValues(0, selected ? -4 : 0, 0),
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.45),
+                          blurRadius: 16,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: AnimatedScale(
+                scale: selected ? 1.15 : 1,
+                duration: const Duration(milliseconds: 200),
+                child: Icon(icon, color: color, size: 24),
+              ),
             ),
             const SizedBox(height: 4),
             Text(

@@ -14,6 +14,7 @@ import 'need_detail_screen.dart';
 import 'payment_methods_screen.dart';
 import 'help_screen.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/motion.dart';
 import 'marketplace_mode_screen.dart';
 import 'auth_screen.dart';
 
@@ -678,6 +679,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required Color textSecondary,
   }) {
     final avatarImage = _profileAvatarImage;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -689,56 +691,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
       child: Column(
         children: [
-          Stack(
-            alignment: Alignment.bottomRight,
-            children: [
-              Container(
-                width: 110,
-                height: 110,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary, width: 2.5),
-                ),
-                child: ClipOval(
-                  child: CircleAvatar(
-                    backgroundColor: surface,
-                    backgroundImage: avatarImage,
-                    child: avatarImage == null
-                        ? const Icon(Icons.person_rounded,
-                            size: 54, color: AppColors.primaryLight)
-                        : null,
+          EntranceMotion(
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                // Rotating glow ring behind the avatar for a living 3D feel.
+                _PulsingAvatarRing(
+                  child: ClipOval(
+                    child: CircleAvatar(
+                      radius: 52,
+                      backgroundColor: surface,
+                      backgroundImage: avatarImage,
+                      child: avatarImage == null
+                          ? const Icon(Icons.person_rounded,
+                              size: 54, color: AppColors.primaryLight)
+                          : null,
+                    ),
                   ),
                 ),
-              ),
-              GestureDetector(
-                onTap: _isUploadingAvatar ? null : _executeNativeImageUpload,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                      shape: BoxShape.circle, color: AppColors.primary),
-                  child: _isUploadingAvatar
-                      ? const Padding(
-                          padding: EdgeInsets.all(9),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.camera_alt_rounded,
-                          color: Colors.white, size: 16),
+                GestureDetector(
+                  onTap: _isUploadingAvatar ? null : _executeNativeImageUpload,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.primary,
+                      border: Border.all(color: bg, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: _isUploadingAvatar
+                        ? const Padding(
+                            padding: EdgeInsets.all(9),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.camera_alt_rounded,
+                            color: Colors.white, size: 16),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-          Text(
-            _currentUserName,
-            style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: textPrimary,
-                fontSize: 24,
-                letterSpacing: -0.5),
+          ShaderMask(
+            shaderCallback: (bounds) => LinearGradient(
+              colors: isDark
+                  ? [AppColors.textPrimary, AppColors.primaryLight]
+                  : [const Color(0xFF0F172A), AppColors.primary],
+            ).createShader(bounds),
+            child: Text(
+              _currentUserName,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  fontSize: 24,
+                  letterSpacing: -0.5),
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -813,24 +829,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildStatCard(IconData icon, String label, String value,
       Color surface, Color border, Color textPrimary, Color textTertiary) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              surface,
+              isDark
+                  ? AppColors.primary.withValues(alpha: 0.06)
+                  : AppColors.primary.withValues(alpha: 0.04),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: border),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.35)
+                  : Colors.black.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primaryLight, size: 22),
-            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: AppColors.primaryLight, size: 20),
+            ),
+            const SizedBox(height: 10),
             Text(value,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w900,
                     color: textPrimary,
-                    fontSize: 16)),
+                    fontSize: 15)),
             const SizedBox(height: 2),
             Text(label,
                 textAlign: TextAlign.center,
@@ -902,27 +947,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2)),
               ),
-              ...(sec['items'] as List<Map<String, dynamic>>).map((item) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
+              ...(sec['items'] as List<Map<String, dynamic>>)
+                  .asMap()
+                  .entries
+                  .map((entry) {
+                final item = entry.value;
+                return EntranceMotion(
+                  delay: Duration(milliseconds: 80 + entry.key * 70),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
                       color: surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: border)),
-                  child: ListTile(
-                    leading: Icon(item['icon'] as IconData,
-                        color: AppColors.primaryLight, size: 22),
-                    title: Text(item['label'] as String,
-                        style: TextStyle(
-                            color: textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14)),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                        color: AppColors.textTertiary, size: 14),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => item['page'] as Widget)),
+                      border: Border.all(color: border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(item['icon'] as IconData,
+                            color: AppColors.primaryLight, size: 20),
+                      ),
+                      title: Text(item['label'] as String,
+                          style: TextStyle(
+                              color: textPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: AppColors.textTertiary, size: 14),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => item['page'] as Widget)),
+                    ),
                   ),
                 );
               }),
@@ -930,6 +997,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+/// A slowly rotating conic glow ring that sits behind the profile avatar,
+/// giving it a premium, living 3D halo. Purely decorative.
+class _PulsingAvatarRing extends StatefulWidget {
+  final Widget child;
+  const _PulsingAvatarRing({required this.child});
+
+  @override
+  State<_PulsingAvatarRing> createState() => _PulsingAvatarRingState();
+}
+
+class _PulsingAvatarRingState extends State<_PulsingAvatarRing>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: SweepGradient(
+              transform: GradientRotation(_controller.value * 2 * 3.1415926),
+              colors: const [
+                AppColors.primary,
+                AppColors.accent,
+                AppColors.primaryLight,
+                AppColors.primary,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.4),
+                blurRadius: 22,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
 import '../widgets/three_d_glass_card.dart';
+import '../widgets/motion.dart';
 import '../widgets/pill_tag.dart';
 import 'offer_sheet.dart';
 
@@ -147,7 +148,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : const Color(0xFFF1F5F9),
-      body: SafeArea(
+      body: Stack(
+        children: [
+          if (isDark) const Positioned.fill(child: FloatingOrbsBackground()),
+          SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -339,12 +343,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemBuilder: (context, index) {
                         final need = filteredNeeds[index];
-                        return _buildModernNeedCard(need);
+                        return EntranceMotion(
+                          delay: Duration(milliseconds: (index * 70).clamp(0, 500)),
+                          child: _buildModernNeedCard(need),
+                        );
                       },
                     ),
             ),
           ],
         ),
+          ),
+        ],
       ),
     );
   }
@@ -353,6 +362,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // ✅ NEED CARD - FIXED
   // ============================================================
   Widget _buildModernNeedCard(legacy.Need need) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color cardTextPrimary =
+        isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
+    final Color cardTextSecondary =
+        isDark ? AppColors.textSecondary : const Color(0xFF475569);
+    final Color cardTextTertiary =
+        isDark ? AppColors.textTertiary : const Color(0xFF94A3B8);
+    final Color cardDivider =
+        isDark ? AppColors.border : const Color(0xFFE2E8F0);
+
     return ThreeDGlassCard(
       glowColor: _getUrgencyColor(need.urgency),
       onTap: () => widget.onOpenDetail(need),
@@ -369,16 +388,16 @@ class _HomeScreenState extends State<HomeScreen> {
               const Spacer(),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.radar_rounded,
                     size: 14,
-                    color: AppColors.textTertiary,
+                    color: cardTextTertiary,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     need.timeElapsed,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: cardTextSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -390,10 +409,10 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           Text(
             need.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
+              color: cardTextPrimary,
               letterSpacing: -0.3,
             ),
           ),
@@ -402,24 +421,24 @@ class _HomeScreenState extends State<HomeScreen> {
             need.description,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: cardTextSecondary,
               height: 1.5,
               fontSize: 14,
             ),
           ),
           const SizedBox(height: 18),
-          Container(height: 1.2, color: AppColors.border),
+          Container(height: 1.2, color: cardDivider),
           const SizedBox(height: 16),
           Row(
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'VALUATION METRIC',
                     style: TextStyle(
-                      color: AppColors.textTertiary,
+                      color: cardTextTertiary,
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1,
