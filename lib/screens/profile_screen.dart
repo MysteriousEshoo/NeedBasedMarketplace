@@ -33,6 +33,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _profileBio = '';
   int _myNeedsCount = 0;
   File? _selectedLocalImage;
+  bool _isProfileLoading = true;
+  bool _isUploadingAvatar = false;
 
   @override
   void initState() {
@@ -43,7 +45,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _isProfileLoading = false);
+      return;
+    }
 
     String name = _fallbackUserName(user);
     String email = user.email ?? 'No email connected';
@@ -52,23 +57,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String city = '';
     String bio = '';
 
+    // Firestore is kept as a compatibility fallback for accounts created by
+    // the existing authentication screen.
     try {
-      final realtimeSnapshot = await FirebaseDatabase.instance
-          .ref()
-          .child('users')
-          .child(user.uid)
-          .get();
-      if (realtimeSnapshot.exists && realtimeSnapshot.value is Map) {
-        final data = Map<String, dynamic>.from(realtimeSnapshot.value as Map);
-        name = _firstProfileValue(data, ['name', 'displayName'], name);
-        email = _firstProfileValue(data, ['email'], email);
-        photoUrl =
-            _nullableProfileValue(data, ['photoUrl', 'photoURL']) ?? photoUrl;
-        phone = _firstProfileValue(data, ['phone'], phone);
-        city = _firstProfileValue(data, ['city', 'location'], city);
-        bio = _firstProfileValue(data, ['bio'], bio);
-      }
-
       final firestoreDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -85,6 +76,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
         bio = _firstProfileValue(firestoreData, ['bio'], bio);
       }
     } catch (_) {
+      // Realtime Database may still be available.
+    }
+
+    // Realtime Database is the live profile source and therefore takes
+    // precedence over the compatibility copy in Firestore.
+    try {
+      final realtimeSnapshot = await FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .get();
+      if (realtimeSnapshot.exists && realtimeSnapshot.value is Map) {
+        final data = Map<String, dynamic>.from(realtimeSnapshot.value as Map);
+        name = _firstProfileValue(data, ['name', 'displayName'], name);
+        email = _firstProfileValue(data, ['email'], email);
+        photoUrl =
+            _nullableProfileValue(data, ['photoUrl', 'photoURL']) ?? photoUrl;
+        phone = _firstProfileValue(data, ['phone'], phone);
+        city = _firstProfileValue(data, ['city', 'location'], city);
+        bio = _firstProfileValue(data, ['bio'], bio);
+      }
+    } catch (_) {
       // Auth data is still enough to keep the profile usable if a read fails.
     }
 
@@ -96,6 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _profilePhone = phone;
       _profileCity = city;
       _profileBio = bio;
+      _isProfileLoading = false;
     });
   }
 
@@ -152,6 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _executeNativeImageUpload() async {
+    if (_isUploadingAvatar) return;
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? image =
@@ -160,12 +175,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final imageFile = File(image.path);
         setState(() {
           _selectedLocalImage = imageFile;
+          _isUploadingAvatar = true;
         });
         await _saveSelectedProfileImage(imageFile);
+        if (!mounted) return;
         _showStatusToast('🎉 Image uploaded successfully!');
       }
-    } catch (e) {
-      _showStatusToast('⚠️ Error uploading image.');
+    } catch (_) {
+      if (!mounted) return;
+      _showStatusToast('⚠️ Error uploading image. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isUploadingAvatar = false);
     }
   }
 
@@ -262,22 +282,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final firestoreData = Map<String, dynamic>.from(realtimeData)
       ..['updatedAt'] = FieldValue.serverTimestamp();
 
+    // Persist to the app's live Realtime Database first. A successful return
+    // from this method always means the profile exists at /users/{uid}.
     await FirebaseDatabase.instance
         .ref()
         .child('users')
         .child(user.uid)
         .update(realtimeData);
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .set(firestoreData, SetOptions(merge: true));
 
     await user.updateDisplayName(cleanName);
     if (cleanPhotoUrl != null && cleanPhotoUrl.isNotEmpty) {
       await user.updatePhotoURL(cleanPhotoUrl);
     }
     await user.reload();
-    await _syncProfileNameToNeeds(user.uid, cleanName);
+
+    // Keep existing Firestore-based features compatible, but do not report a
+    // failed profile save if this optional mirror or old listings cannot be
+    // updated due to their own security rules.
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(firestoreData, SetOptions(merge: true));
+    } catch (_) {}
+    try {
+      await _syncProfileNameToNeeds(user.uid, cleanName);
+    } catch (_) {}
   }
 
   Future<void> _syncProfileNameToNeeds(String uid, String name) async {
@@ -305,6 +335,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _showStatusToast('Please login to edit your profile.');
+      return;
+    }
+    if (_isProfileLoading) {
+      _showStatusToast('Please wait while your profile loads.');
       return;
     }
 
@@ -433,6 +467,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Enter your name';
                               }
+                              if (value.trim().length < 2) {
+                                return 'Name must be at least 2 characters';
+                              }
+                              if (value.trim().length > 60) {
+                                return 'Name must be 60 characters or less';
+                              }
                               return null;
                             },
                           ),
@@ -444,6 +484,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               labelText: 'Phone',
                               prefixIcon: Icon(Icons.phone_rounded),
                             ),
+                            validator: (value) {
+                              final phone = value?.trim() ?? '';
+                              if (phone.isEmpty) return null;
+                              final digits =
+                                  phone.replaceAll(RegExp(r'\D'), '');
+                              if (digits.length < 10 || digits.length > 15) {
+                                return 'Enter a valid phone number';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -463,6 +513,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               labelText: 'Bio',
                               prefixIcon: Icon(Icons.notes_rounded),
                             ),
+                            maxLength: 250,
                           ),
                           const SizedBox(height: 22),
                           SizedBox(
@@ -501,7 +552,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           photoUrl: photoUrl,
                                         );
 
-                                        if (!mounted) return;
+                                        if (!mounted || !sheetContext.mounted) {
+                                          return;
+                                        }
                                         setState(() {
                                           _currentUserName =
                                               nameController.text.trim();
@@ -514,14 +567,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           _profilePhotoUrl = photoUrl;
                                           _selectedLocalImage = null;
                                         });
-                                        if (sheetContext.mounted) {
-                                          Navigator.pop(sheetContext);
-                                        }
+                                        Navigator.pop(sheetContext);
                                         _showStatusToast('Profile updated.');
                                       } catch (e) {
-                                        setSheetState(() => isSaving = false);
-                                        _showStatusToast(
-                                            'Could not update profile: ${e.toString()}');
+                                        if (sheetContext.mounted) {
+                                          setSheetState(() => isSaving = false);
+                                        }
+                                        if (mounted) {
+                                          _showStatusToast(
+                                            'Could not update profile. Please check your connection and try again.',
+                                          );
+                                        }
                                       }
                                     },
                               icon: isSaving
@@ -655,14 +711,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: _executeNativeImageUpload,
+                onTap: _isUploadingAvatar ? null : _executeNativeImageUpload,
                 child: Container(
                   width: 36,
                   height: 36,
                   decoration: const BoxDecoration(
                       shape: BoxShape.circle, color: AppColors.primary),
-                  child: const Icon(Icons.camera_alt_rounded,
-                      color: Colors.white, size: 16),
+                  child: _isUploadingAvatar
+                      ? const Padding(
+                          padding: EdgeInsets.all(9),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.camera_alt_rounded,
+                          color: Colors.white, size: 16),
                 ),
               ),
             ],
@@ -708,7 +772,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
           const SizedBox(height: 14),
           OutlinedButton.icon(
-            onPressed: _openEditProfileSheet,
+            onPressed: _isProfileLoading ? null : _openEditProfileSheet,
             icon: const Icon(Icons.edit_rounded, size: 16),
             label: const Text('Edit Profile'),
             style: OutlinedButton.styleFrom(
