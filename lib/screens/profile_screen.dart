@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart' hide Query;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -13,7 +14,6 @@ import 'need_detail_screen.dart';
 import 'payment_methods_screen.dart';
 import 'help_screen.dart';
 import '../providers/theme_provider.dart';
-import '../providers/notification_provider.dart';
 import 'marketplace_mode_screen.dart';
 import 'auth_screen.dart';
 
@@ -27,6 +27,10 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String _currentUserName = 'Loading...';
   String _currentUserEmail = 'Loading...';
+  String? _profilePhotoUrl;
+  String _profilePhone = '';
+  String _profileCity = '';
+  String _profileBio = '';
   int _myNeedsCount = 0;
   File? _selectedLocalImage;
 
@@ -37,20 +41,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fetchMyNeedsCount();
   }
 
-  void _loadUserData() {
+  Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      setState(() {
-        if (user.displayName != null && user.displayName!.isNotEmpty) {
-          _currentUserName = user.displayName!;
-        } else if (user.email != null) {
-          _currentUserName = user.email!.split('@').first;
-        } else {
-          _currentUserName = 'User';
-        }
-        _currentUserEmail = user.email ?? 'No email connected';
-      });
+    if (user == null) return;
+
+    String name = _fallbackUserName(user);
+    String email = user.email ?? 'No email connected';
+    String? photoUrl = user.photoURL;
+    String phone = '';
+    String city = '';
+    String bio = '';
+
+    try {
+      final realtimeSnapshot = await FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .get();
+      if (realtimeSnapshot.exists && realtimeSnapshot.value is Map) {
+        final data = Map<String, dynamic>.from(realtimeSnapshot.value as Map);
+        name = _firstProfileValue(data, ['name', 'displayName'], name);
+        email = _firstProfileValue(data, ['email'], email);
+        photoUrl =
+            _nullableProfileValue(data, ['photoUrl', 'photoURL']) ?? photoUrl;
+        phone = _firstProfileValue(data, ['phone'], phone);
+        city = _firstProfileValue(data, ['city', 'location'], city);
+        bio = _firstProfileValue(data, ['bio'], bio);
+      }
+
+      final firestoreDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final firestoreData = firestoreDoc.data();
+      if (firestoreData != null) {
+        name = _firstProfileValue(firestoreData, ['name', 'displayName'], name);
+        email = _firstProfileValue(firestoreData, ['email'], email);
+        photoUrl =
+            _nullableProfileValue(firestoreData, ['photoUrl', 'photoURL']) ??
+                photoUrl;
+        phone = _firstProfileValue(firestoreData, ['phone'], phone);
+        city = _firstProfileValue(firestoreData, ['city', 'location'], city);
+        bio = _firstProfileValue(firestoreData, ['bio'], bio);
+      }
+    } catch (_) {
+      // Auth data is still enough to keep the profile usable if a read fails.
     }
+
+    if (!mounted) return;
+    setState(() {
+      _currentUserName = name;
+      _currentUserEmail = email;
+      _profilePhotoUrl = photoUrl;
+      _profilePhone = phone;
+      _profileCity = city;
+      _profileBio = bio;
+    });
+  }
+
+  String _fallbackUserName(User user) {
+    if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+      return user.displayName!.trim();
+    }
+    if (user.email != null && user.email!.isNotEmpty) {
+      return user.email!.split('@').first;
+    }
+    return 'User';
+  }
+
+  String _firstProfileValue(
+    Map<String, dynamic> data,
+    List<String> keys,
+    String fallback,
+  ) {
+    return _nullableProfileValue(data, keys) ?? fallback;
+  }
+
+  String? _nullableProfileValue(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return null;
   }
 
   void _fetchMyNeedsCount() {
@@ -65,7 +139,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             event.snapshot.value as Map<dynamic, dynamic>;
         allMap.forEach((key, value) {
           final data = Map<String, dynamic>.from(value as Map);
-          if (data['authorName'] == _currentUserName ||
+          if (data['authorId'] == user.uid ||
+              data['userId'] == user.uid ||
+              data['authorName'] == _currentUserName ||
               data['authorName'] == user.displayName) {
             count++;
           }
@@ -81,14 +157,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final XFile? image =
           await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
       if (image != null) {
+        final imageFile = File(image.path);
         setState(() {
-          _selectedLocalImage = File(image.path);
+          _selectedLocalImage = imageFile;
         });
+        await _saveSelectedProfileImage(imageFile);
         _showStatusToast('🎉 Image uploaded successfully!');
       }
     } catch (e) {
       _showStatusToast('⚠️ Error uploading image.');
     }
+  }
+
+  Future<void> _saveSelectedProfileImage(File imageFile) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final photoUrl = await _uploadProfileImage(user.uid, imageFile);
+      final profileName = _currentUserName == 'Loading...'
+          ? _fallbackUserName(user)
+          : _currentUserName;
+      await _saveProfileToFirebase(
+        user: user,
+        name: profileName,
+        phone: _profilePhone,
+        city: _profileCity,
+        bio: _profileBio,
+        photoUrl: photoUrl,
+      );
+      if (!mounted) return;
+      setState(() {
+        _profilePhotoUrl = photoUrl;
+        _selectedLocalImage = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _selectedLocalImage = null);
+      rethrow;
+    }
+  }
+
+  Future<String> _uploadProfileImage(String uid, File imageFile) async {
+    final ref = firebase_storage.FirebaseStorage.instance
+        .ref()
+        .child('profile_images')
+        .child('$uid.jpg');
+    await ref.putFile(
+      imageFile,
+      firebase_storage.SettableMetadata(contentType: 'image/jpeg'),
+    );
+    return ref.getDownloadURL();
   }
 
   void _showStatusToast(String msg) {
@@ -98,6 +217,349 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: AppColors.primary,
           behavior: SnackBarBehavior.floating),
     );
+  }
+
+  ImageProvider? get _profileAvatarImage {
+    if (_selectedLocalImage != null) return FileImage(_selectedLocalImage!);
+    final photoUrl = _profilePhotoUrl;
+    if (photoUrl != null && photoUrl.isNotEmpty) {
+      return NetworkImage(photoUrl);
+    }
+    return null;
+  }
+
+  Future<void> _saveProfileToFirebase({
+    required User user,
+    required String name,
+    required String phone,
+    required String city,
+    required String bio,
+    String? photoUrl,
+  }) async {
+    final cleanName =
+        name.trim().isEmpty ? _fallbackUserName(user) : name.trim();
+    final cleanPhone = phone.trim();
+    final cleanCity = city.trim();
+    final cleanBio = bio.trim();
+    final cleanPhotoUrl = photoUrl?.trim();
+
+    final realtimeData = <String, dynamic>{
+      'uid': user.uid,
+      'name': cleanName,
+      'displayName': cleanName,
+      'email': user.email ?? _currentUserEmail,
+      'phone': cleanPhone,
+      'city': cleanCity,
+      'location': cleanCity,
+      'bio': cleanBio,
+      'updatedAt': ServerValue.timestamp,
+    };
+    if (cleanPhotoUrl != null && cleanPhotoUrl.isNotEmpty) {
+      realtimeData['photoUrl'] = cleanPhotoUrl;
+      realtimeData['photoURL'] = cleanPhotoUrl;
+    }
+
+    final firestoreData = Map<String, dynamic>.from(realtimeData)
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+
+    await FirebaseDatabase.instance
+        .ref()
+        .child('users')
+        .child(user.uid)
+        .update(realtimeData);
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .set(firestoreData, SetOptions(merge: true));
+
+    await user.updateDisplayName(cleanName);
+    if (cleanPhotoUrl != null && cleanPhotoUrl.isNotEmpty) {
+      await user.updatePhotoURL(cleanPhotoUrl);
+    }
+    await user.reload();
+    await _syncProfileNameToNeeds(user.uid, cleanName);
+  }
+
+  Future<void> _syncProfileNameToNeeds(String uid, String name) async {
+    final needsRef = FirebaseDatabase.instance.ref().child('needs');
+    final snapshot = await needsRef.get();
+    if (!snapshot.exists || snapshot.value is! Map) return;
+
+    final updates = <String, dynamic>{};
+    final needsMap = snapshot.value as Map<dynamic, dynamic>;
+    needsMap.forEach((key, value) {
+      if (value is! Map) return;
+      final data = Map<String, dynamic>.from(value);
+      if (data['authorId'] == uid || data['userId'] == uid) {
+        updates['${key.toString()}/authorName'] = name;
+        updates['${key.toString()}/userName'] = name;
+      }
+    });
+
+    if (updates.isNotEmpty) {
+      await needsRef.update(updates);
+    }
+  }
+
+  Future<void> _openEditProfileSheet() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showStatusToast('Please login to edit your profile.');
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: _currentUserName);
+    final phoneController = TextEditingController(text: _profilePhone);
+    final cityController = TextEditingController(text: _profileCity);
+    final bioController = TextEditingController(text: _profileBio);
+    File? pickedImage;
+    bool isSaving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final isDark =
+                Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+            final surface = isDark ? AppColors.surface : Colors.white;
+            final textPrimary =
+                isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
+            ImageProvider? previewImage;
+            if (pickedImage != null) {
+              previewImage = FileImage(pickedImage!);
+            } else if (_profilePhotoUrl != null &&
+                _profilePhotoUrl!.isNotEmpty) {
+              previewImage = NetworkImage(_profilePhotoUrl!);
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.92,
+                ),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 44,
+                              height: 4,
+                              margin: const EdgeInsets.only(bottom: 18),
+                              decoration: BoxDecoration(
+                                color: AppColors.textTertiary.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'Edit Profile',
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Center(
+                            child: GestureDetector(
+                              onTap: isSaving
+                                  ? null
+                                  : () async {
+                                      final image = await ImagePicker()
+                                          .pickImage(
+                                              source: ImageSource.gallery,
+                                              imageQuality: 85);
+                                      if (image == null) return;
+                                      setSheetState(() {
+                                        pickedImage = File(image.path);
+                                      });
+                                    },
+                              child: Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 46,
+                                    backgroundColor:
+                                        AppColors.primary.withOpacity(0.10),
+                                    backgroundImage: previewImage,
+                                    child: previewImage == null
+                                        ? const Icon(Icons.person_rounded,
+                                            color: AppColors.primaryLight,
+                                            size: 42)
+                                        : null,
+                                  ),
+                                  Container(
+                                    height: 32,
+                                    width: 32,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.camera_alt_rounded,
+                                        color: Colors.white, size: 15),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: nameController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Full name',
+                              prefixIcon: Icon(Icons.person_rounded),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Enter your name';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: phoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: 'Phone',
+                              prefixIcon: Icon(Icons.phone_rounded),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: cityController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'City',
+                              prefixIcon: Icon(Icons.location_city_rounded),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: bioController,
+                            maxLines: 3,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              labelText: 'Bio',
+                              prefixIcon: Icon(Icons.notes_rounded),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: isSaving
+                                  ? null
+                                  : () async {
+                                      if (!(formKey.currentState?.validate() ??
+                                          false)) {
+                                        return;
+                                      }
+
+                                      setSheetState(() => isSaving = true);
+                                      try {
+                                        String? photoUrl = _profilePhotoUrl;
+                                        if (pickedImage != null) {
+                                          photoUrl = await _uploadProfileImage(
+                                              user.uid, pickedImage!);
+                                        }
+
+                                        await _saveProfileToFirebase(
+                                          user: user,
+                                          name: nameController.text,
+                                          phone: phoneController.text,
+                                          city: cityController.text,
+                                          bio: bioController.text,
+                                          photoUrl: photoUrl,
+                                        );
+
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _currentUserName =
+                                              nameController.text.trim();
+                                          _profilePhone =
+                                              phoneController.text.trim();
+                                          _profileCity =
+                                              cityController.text.trim();
+                                          _profileBio =
+                                              bioController.text.trim();
+                                          _profilePhotoUrl = photoUrl;
+                                          _selectedLocalImage = null;
+                                        });
+                                        if (sheetContext.mounted) {
+                                          Navigator.pop(sheetContext);
+                                        }
+                                        _showStatusToast('Profile updated.');
+                                      } catch (e) {
+                                        setSheetState(() => isSaving = false);
+                                        _showStatusToast(
+                                            'Could not update profile: ${e.toString()}');
+                                      }
+                                    },
+                              icon: isSaving
+                                  ? const SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.check_rounded,
+                                      color: Colors.white),
+                              label: Text(
+                                isSaving ? 'Saving...' : 'Save Profile',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    phoneController.dispose();
+    cityController.dispose();
+    bioController.dispose();
   }
 
   @override
@@ -159,6 +621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required Color textPrimary,
     required Color textSecondary,
   }) {
+    final avatarImage = _profileAvatarImage;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -183,10 +646,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ClipOval(
                   child: CircleAvatar(
                     backgroundColor: surface,
-                    backgroundImage: _selectedLocalImage != null
-                        ? FileImage(_selectedLocalImage!)
-                        : null,
-                    child: _selectedLocalImage == null
+                    backgroundImage: avatarImage,
+                    child: avatarImage == null
                         ? const Icon(Icons.person_rounded,
                             size: 54, color: AppColors.primaryLight)
                         : null,
@@ -222,6 +683,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 color: textSecondary,
                 fontWeight: FontWeight.w500,
                 fontSize: 13),
+          ),
+          if (_profileCity.isNotEmpty || _profileBio.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            if (_profileCity.isNotEmpty)
+              Text(
+                _profileCity,
+                style: TextStyle(
+                  color: textSecondary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            if (_profileBio.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                _profileBio,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+            ],
+          ],
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _openEditProfileSheet,
+            icon: const Icon(Icons.edit_rounded, size: 16),
+            label: const Text('Edit Profile'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
           ),
         ],
       ),
@@ -295,7 +792,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           {
             'icon': Icons.description_rounded,
             'label': 'My Needs',
-            'page': _MyNeedsScreen(authorName: _currentUserName)
+            'page': _MyNeedsScreen(
+              userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+              authorName: _currentUserName,
+            )
           },
           {
             'icon': Icons.bookmark_rounded,
@@ -452,6 +952,22 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
                                 : Urgency.medium,
                             authorName: data['authorName'] ?? '',
                             offers: data['offers'] ?? 0,
+                            companyName: data['company'],
+                            condition: data['condition'] == null
+                                ? null
+                                : (data['condition'] == 'Used'
+                                    ? ProductCondition.used
+                                    : ProductCondition.new_),
+                            paymentMethod: data['paymentMethod'] == null
+                                ? null
+                                : (data['paymentMethod'] == 'Online Deposit'
+                                    ? PaymentMethod.onlineDeposit
+                                    : PaymentMethod.cash),
+                            location: data['location'],
+                            authorId: data['authorId'] ?? data['userId'],
+                            userId: data['userId'] ?? data['authorId'],
+                            userName: data['userName'] ?? data['authorName'],
+                            isPremium: data['isPremium'] ?? false,
                           ));
                         }
                       });
@@ -1779,8 +2295,9 @@ class _FullEnterpriseSettingsScreenState
 }
 
 class _MyNeedsScreen extends StatelessWidget {
+  final String userId;
   final String authorName;
-  const _MyNeedsScreen({required this.authorName});
+  const _MyNeedsScreen({required this.userId, required this.authorName});
 
   @override
   Widget build(BuildContext context) {
@@ -1817,7 +2334,11 @@ class _MyNeedsScreen extends StatelessWidget {
                 snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
             allMap.forEach((key, value) {
               final data = Map<String, dynamic>.from(value as Map);
-              if (data['authorName'] == authorName) {
+              final ownsNeed = (userId.isNotEmpty &&
+                      (data['authorId'] == userId ||
+                          data['userId'] == userId)) ||
+                  data['authorName'] == authorName;
+              if (ownsNeed) {
                 myFilteredList.add(Need(
                   id: key,
                   title: data['title'] ?? '',
@@ -1829,6 +2350,22 @@ class _MyNeedsScreen extends StatelessWidget {
                       data['urgency'] == 'high' ? Urgency.high : Urgency.medium,
                   authorName: data['authorName'] ?? '',
                   offers: data['offers'] ?? 0,
+                  companyName: data['company'],
+                  condition: data['condition'] == null
+                      ? null
+                      : (data['condition'] == 'Used'
+                          ? ProductCondition.used
+                          : ProductCondition.new_),
+                  paymentMethod: data['paymentMethod'] == null
+                      ? null
+                      : (data['paymentMethod'] == 'Online Deposit'
+                          ? PaymentMethod.onlineDeposit
+                          : PaymentMethod.cash),
+                  location: data['location'],
+                  authorId: data['authorId'] ?? data['userId'],
+                  userId: data['userId'] ?? data['authorId'],
+                  userName: data['userName'] ?? data['authorName'],
+                  isPremium: data['isPremium'] ?? false,
                 ));
               }
             });

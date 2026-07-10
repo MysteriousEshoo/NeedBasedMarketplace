@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/pill_tag.dart';
-import '../widgets/primary_loading_button.dart';
 import 'offer_sheet.dart';
 import 'chat_screen.dart';
+import 'edit_need_screen.dart';
 
 class NeedDetailScreen extends StatefulWidget {
   const NeedDetailScreen({super.key, required this.need});
@@ -23,9 +25,13 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
   bool _isSellerMode = false;
   String? _sellerId;
 
+  // Mutable copy so the screen can refresh in place after an edit.
+  late Need _need;
+
   @override
   void initState() {
     super.initState();
+    _need = widget.need;
     _listenUserRole();
     _findChatSeller();
   }
@@ -48,9 +54,10 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
 
   void _findChatSeller() {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final needId = widget.need.id;
+    final needId = _need.id;
 
-    if (widget.need.authorId == currentUserId) {
+    final needOwnerId = _need.authorId ?? _need.userId;
+    if (needOwnerId == currentUserId) {
       FirebaseDatabase.instance
           .ref()
           .child('chats')
@@ -76,7 +83,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
         }
       });
     } else {
-      _sellerId = widget.need.authorId;
+      _sellerId = needOwnerId;
     }
   }
 
@@ -85,13 +92,13 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => OfferSheet(need: widget.need),
+      builder: (_) => OfferSheet(need: _need),
     );
   }
 
   void _openChat() {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final needAuthorId = widget.need.authorId ?? widget.need.userId ?? '';
+    final needAuthorId = _need.authorId ?? _need.userId ?? '';
 
     if (needAuthorId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,17 +129,162 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
       }
     } else {
       otherUserId = needAuthorId;
-      otherUserName = widget.need.authorName;
+      otherUserName = _need.authorName;
     }
 
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ChatScreen(
-        needId: widget.need.id,
-        needTitle: widget.need.title,
+        needId: _need.id,
+        needTitle: _need.title,
         otherUserId: otherUserId,
         otherUserName: otherUserName,
       ),
     ));
+  }
+
+  /// Human-readable text used across every share channel.
+  String _buildShareText() {
+    final buffer = StringBuffer()
+      ..writeln('📌 ${_need.title}')
+      ..writeln()
+      ..writeln('💰 Budget: ${_need.formattedBudget}')
+      ..writeln('🏷️ Category: ${_need.category}');
+    if (_need.location != null &&
+        _need.location!.isNotEmpty &&
+        _need.location != 'Not specified') {
+      buffer.writeln('📍 Location: ${_need.location}');
+    }
+    buffer
+      ..writeln()
+      ..writeln(_need.description)
+      ..writeln()
+      ..writeln('Shared via Need Marketplace 🇵🇰');
+    return buffer.toString();
+  }
+
+  void _openShareSheet() {
+    final isDark =
+        Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+    final Color surface = isDark ? AppColors.surface : Colors.white;
+    final Color textPrimary =
+        isDark ? AppColors.textPrimary : const Color(0xFF0F172A);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: AppColors.textTertiary.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                Text('Share this need',
+                    style: TextStyle(
+                        color: textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18)),
+                const SizedBox(height: 16),
+                _ShareOption(
+                  icon: Icons.chat_rounded,
+                  color: const Color(0xFF25D366),
+                  label: 'Share on WhatsApp',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _shareOnWhatsApp();
+                  },
+                ),
+                _ShareOption(
+                  icon: Icons.copy_rounded,
+                  color: AppColors.primary,
+                  label: 'Copy details',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _copyToClipboard();
+                  },
+                ),
+                _ShareOption(
+                  icon: Icons.email_rounded,
+                  color: AppColors.accent,
+                  label: 'Share via Email',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _shareViaEmail();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _shareOnWhatsApp() async {
+    final uri = Uri.parse(
+        'https://wa.me/?text=${Uri.encodeComponent(_buildShareText())}');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      _copyToClipboard(
+          message: 'WhatsApp not available — details copied instead');
+    }
+  }
+
+  Future<void> _shareViaEmail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      query: _encodeQuery({
+        'subject': 'Need: ${_need.title}',
+        'body': _buildShareText(),
+      }),
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      _copyToClipboard(message: 'No email app found — details copied instead');
+    }
+  }
+
+  // mailto queries need spaces as %20, which Uri's default encoding gets wrong.
+  String _encodeQuery(Map<String, String> params) {
+    return params.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+  }
+
+  Future<void> _copyToClipboard({String? message}) async {
+    await Clipboard.setData(ClipboardData(text: _buildShareText()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message ?? '📋 Need details copied to clipboard'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _openEditNeed() async {
+    final updated = await Navigator.of(context).push<Need>(
+      MaterialPageRoute(builder: (_) => EditNeedScreen(need: _need)),
+    );
+    if (updated != null && mounted) {
+      setState(() => _need = updated);
+    }
   }
 
   @override
@@ -158,20 +310,20 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
           children: [
             Row(children: [
               PillTag(
-                label: widget.need.category,
+                label: _need.category,
                 foreground: AppColors.accent,
                 background: AppColors.accent.withOpacity(0.08),
               ),
               const SizedBox(width: 8),
               PillTag(
-                label: widget.need.urgency.label,
+                label: _need.urgency.label,
                 icon: Icons.local_fire_department_rounded,
-                foreground: widget.need.urgency.color,
-                background: widget.need.urgency.softColor,
+                foreground: _need.urgency.color,
+                background: _need.urgency.softColor,
               ),
             ]),
             const SizedBox(height: 18),
-            Text(widget.need.title,
+            Text(_need.title,
                 style: Theme.of(context)
                     .textTheme
                     .headlineMedium
@@ -181,20 +333,19 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
             const SizedBox(height: 20),
             _buildBudgetCard(),
             const SizedBox(height: 24),
-            if (widget.need.companyName != null &&
-                widget.need.companyName!.isNotEmpty) ...[
+            if (_need.companyName != null && _need.companyName!.isNotEmpty) ...[
               _buildInfoRow(Icons.phone_android_rounded, 'Company',
-                  widget.need.companyName!, textPrimary, textSecondary),
+                  _need.companyName!, textPrimary, textSecondary),
               const SizedBox(height: 12),
             ],
-            if (widget.need.condition != null) ...[
+            if (_need.condition != null) ...[
               _buildInfoRow(Icons.verified_rounded, 'Condition',
-                  widget.need.condition!.label, textPrimary, textSecondary),
+                  _need.condition!.label, textPrimary, textSecondary),
               const SizedBox(height: 12),
             ],
-            if (widget.need.paymentMethod != null) ...[
+            if (_need.paymentMethod != null) ...[
               _buildInfoRow(Icons.payments_rounded, 'Payment',
-                  widget.need.paymentMethod!.label, textPrimary, textSecondary),
+                  _need.paymentMethod!.label, textPrimary, textSecondary),
               const SizedBox(height: 12),
             ],
             Text('Description',
@@ -203,7 +354,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                     .titleLarge
                     ?.copyWith(color: textPrimary)),
             const SizedBox(height: 10),
-            Text(widget.need.description,
+            Text(_need.description,
                 style:
                     TextStyle(color: textSecondary, height: 1.6, fontSize: 15)),
           ],
@@ -224,7 +375,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
               .ref()
               .child('users_saved_needs')
               .child(FirebaseAuth.instance.currentUser?.uid ?? '')
-              .child(widget.need.id)
+              .child(_need.id)
               .onValue,
           builder: (context, AsyncSnapshot<DatabaseEvent> snap) {
             final isSaved = snap.hasData && snap.data!.snapshot.value != null;
@@ -242,7 +393,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                     .ref()
                     .child('users_saved_needs')
                     .child(user.uid)
-                    .child(widget.need.id);
+                    .child(_need.id);
                 if (isSaved) {
                   await ref.remove();
                   if (mounted) {
@@ -266,16 +417,16 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
             );
           },
         ),
-        IconButton(icon: const Icon(Icons.share_outlined), onPressed: () {}),
+        IconButton(
+            icon: const Icon(Icons.share_outlined), onPressed: _openShareSheet),
         const SizedBox(width: 4),
       ],
     );
   }
 
   Widget _buildAuthorRow(Color textPrimary, Color textSecondary) {
-    final initial = widget.need.authorName.isNotEmpty
-        ? widget.need.authorName[0].toUpperCase()
-        : '?';
+    final initial =
+        _need.authorName.isNotEmpty ? _need.authorName[0].toUpperCase() : '?';
     return Row(children: [
       CircleAvatar(
         radius: 22,
@@ -288,14 +439,14 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
       ),
       const SizedBox(width: 12),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.need.authorName,
+        Text(_need.authorName,
             style: TextStyle(
                 fontWeight: FontWeight.w700, fontSize: 15, color: textPrimary)),
         Row(children: [
           const Icon(Icons.schedule_rounded,
               size: 13, color: AppColors.textSecondary),
           const SizedBox(width: 4),
-          Text('Posted ${widget.need.timeElapsed}',
+          Text('Posted ${_need.timeElapsed}',
               style: const TextStyle(
                   color: AppColors.textSecondary, fontSize: 12)),
         ]),
@@ -328,7 +479,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                   color: Colors.white.withOpacity(0.8),
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text(widget.need.formattedBudget,
+          Text(_need.formattedBudget,
               style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -336,7 +487,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
         ]),
         const Spacer(),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${widget.need.offers} offers',
+          Text('${_need.offers} offers',
               style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -373,7 +524,8 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
 
   Widget _buildBottomBar(Color surface, Color border) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final isMyNeed = widget.need.authorId == currentUserId;
+    final isMyNeed = currentUserId.isNotEmpty &&
+        (_need.authorId ?? _need.userId) == currentUserId;
 
     bool showChat = true;
     if (isMyNeed) {
@@ -413,7 +565,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
             if (isMyNeed)
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: _openEditNeed,
                   icon: const Icon(Icons.edit_rounded, size: 18),
                   label: const Text('Edit Need'),
                   style: OutlinedButton.styleFrom(
@@ -454,6 +606,42 @@ class _SquareIconButton extends StatelessWidget {
           child: Icon(icon, color: AppColors.primary),
         ),
       ),
+    );
+  }
+}
+
+class _ShareOption extends StatelessWidget {
+  const _ShareOption({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        height: 44,
+        width: 44,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+      onTap: onTap,
     );
   }
 }

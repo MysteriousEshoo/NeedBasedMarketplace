@@ -199,9 +199,22 @@ class _MainShellState extends State<MainShell> {
                 urgency: dynamicUrgency,
                 authorName: data['authorName'] ?? 'Anonymous',
                 offers: data['offers'] ?? 0,
+                companyName: data['company'],
+                condition: data['condition'] == null
+                    ? null
+                    : (data['condition'] == 'Used'
+                        ? legacy.ProductCondition.used
+                        : legacy.ProductCondition.new_),
+                paymentMethod: data['paymentMethod'] == null
+                    ? null
+                    : (data['paymentMethod'] == 'Online Deposit'
+                        ? legacy.PaymentMethod.onlineDeposit
+                        : legacy.PaymentMethod.cash),
+                location: data['location'],
                 authorId: data['authorId'] ?? data['userId'],
                 userId: data['userId'],
                 userName: data['userName'],
+                isPremium: data['isPremium'] ?? false,
               ));
             });
             liveNeeds = liveNeeds.reversed.toList();
@@ -321,10 +334,12 @@ class _SavedNeedsTab extends StatelessWidget {
                   if (savedIds.contains(key)) {
                     final data = Map<String, dynamic>.from(value as Map);
                     legacy.Urgency dynamicUrgency = legacy.Urgency.medium;
-                    if (data['urgency'] == 'high')
+                    if (data['urgency'] == 'high') {
                       dynamicUrgency = legacy.Urgency.high;
-                    if (data['urgency'] == 'low')
+                    }
+                    if (data['urgency'] == 'low') {
                       dynamicUrgency = legacy.Urgency.low;
+                    }
                     bookmarkedNeeds.add(legacy.Need(
                       id: key,
                       title: data['title'] ?? '',
@@ -335,6 +350,22 @@ class _SavedNeedsTab extends StatelessWidget {
                       urgency: dynamicUrgency,
                       authorName: data['authorName'] ?? 'Anonymous',
                       offers: data['offers'] ?? 0,
+                      companyName: data['company'],
+                      condition: data['condition'] == null
+                          ? null
+                          : (data['condition'] == 'Used'
+                              ? legacy.ProductCondition.used
+                              : legacy.ProductCondition.new_),
+                      paymentMethod: data['paymentMethod'] == null
+                          ? null
+                          : (data['paymentMethod'] == 'Online Deposit'
+                              ? legacy.PaymentMethod.onlineDeposit
+                              : legacy.PaymentMethod.cash),
+                      location: data['location'],
+                      authorId: data['authorId'] ?? data['userId'],
+                      userId: data['userId'] ?? data['authorId'],
+                      userName: data['userName'] ?? data['authorName'],
+                      isPremium: data['isPremium'] ?? false,
                     ));
                   }
                 });
