@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart' hide Query;
@@ -7,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
@@ -1201,6 +1204,31 @@ class _SavedOffersPipelineScreen extends StatelessWidget {
 // FULL SETTINGS SCREEN
 // ----------------------------------------------------------------------------
 
+class _SalesContactConfig {
+  final String phoneDisplay;
+  final String phoneDialValue;
+  final String email;
+  final String emailSubject;
+  final String emailBody;
+
+  const _SalesContactConfig({
+    required this.phoneDisplay,
+    required this.phoneDialValue,
+    required this.email,
+    required this.emailSubject,
+    required this.emailBody,
+  });
+
+  static const fallback = _SalesContactConfig(
+    phoneDisplay: '+92 300 1234567',
+    phoneDialValue: '+923001234567',
+    email: 'sales@marketplace.com',
+    emailSubject: 'Need Marketplace sales inquiry',
+    emailBody:
+        'Hello Sales Team,\n\nI would like to connect with your sales team.\n\nRegards,',
+  );
+}
+
 class _FullEnterpriseSettingsScreen extends StatefulWidget {
   const _FullEnterpriseSettingsScreen();
 
@@ -1215,11 +1243,20 @@ class _FullEnterpriseSettingsScreenState
   bool _fingerprintEnabled = false;
   bool _faceIdEnabled = false;
   bool _notificationsEnabled = true;
+  _SalesContactConfig _salesContactConfig = _SalesContactConfig.fallback;
+  StreamSubscription<DatabaseEvent>? _salesContactSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadNotificationSettings();
+    _listenToSalesContactConfig();
+  }
+
+  @override
+  void dispose() {
+    _salesContactSubscription?.cancel();
+    super.dispose();
   }
 
   void _loadNotificationSettings() {
@@ -1241,6 +1278,189 @@ class _FullEnterpriseSettingsScreenState
         }
       }
     });
+  }
+
+  void _listenToSalesContactConfig() {
+    _salesContactSubscription = FirebaseDatabase.instance
+        .ref()
+        .child('app_config')
+        .child('contact_sales')
+        .onValue
+        .listen((event) {
+      final config = _parseSalesContactConfig(event.snapshot.value);
+      if (mounted) setState(() => _salesContactConfig = config);
+    }, onError: (_) {
+      if (mounted) {
+        setState(() => _salesContactConfig = _SalesContactConfig.fallback);
+      }
+    });
+  }
+
+  _SalesContactConfig _parseSalesContactConfig(Object? value) {
+    if (value is! Map) return _SalesContactConfig.fallback;
+
+    final data = Map<Object?, Object?>.from(value);
+    final phoneNode = data['phone'];
+    final phoneData =
+        phoneNode is Map ? Map<Object?, Object?>.from(phoneNode) : null;
+    final emailNode = data['email'];
+    final emailData =
+        emailNode is Map ? Map<Object?, Object?>.from(emailNode) : null;
+
+    final phoneDialValue = _firstNonEmptyString(data, [
+          'phoneNumber',
+          'directPhone',
+          'directPhoneChannel',
+          'salesPhone',
+          'dialNumber',
+        ]) ??
+        _firstNonEmptyString(phoneData, ['dial', 'number', 'value']) ??
+        (phoneNode is String && phoneNode.trim().isNotEmpty
+            ? phoneNode.trim()
+            : _SalesContactConfig.fallback.phoneDialValue);
+
+    final phoneDisplay = _firstNonEmptyString(data, [
+          'phoneDisplay',
+          'displayPhone',
+          'phoneLabel',
+        ]) ??
+        _firstNonEmptyString(phoneData, ['display', 'label', 'displayValue']) ??
+        phoneDialValue;
+
+    final rawEmail = _firstNonEmptyString(data, [
+          'mailbox',
+          'corporateMailbox',
+          'officialCorporateMailbox',
+          'salesEmail',
+          'emailAddress',
+        ]) ??
+        _firstNonEmptyString(emailData, ['address', 'mailbox', 'value']) ??
+        (emailNode is String && emailNode.trim().isNotEmpty
+            ? emailNode.trim()
+            : _SalesContactConfig.fallback.email);
+
+    return _SalesContactConfig(
+      phoneDisplay: phoneDisplay,
+      phoneDialValue: phoneDialValue,
+      email: _looksLikeEmail(rawEmail)
+          ? rawEmail
+          : _SalesContactConfig.fallback.email,
+      emailSubject: _firstNonEmptyString(data, ['emailSubject', 'subject']) ??
+          _firstNonEmptyString(emailData, ['subject']) ??
+          _SalesContactConfig.fallback.emailSubject,
+      emailBody: _firstNonEmptyString(data, ['emailBody', 'body']) ??
+          _firstNonEmptyString(emailData, ['body']) ??
+          _SalesContactConfig.fallback.emailBody,
+    );
+  }
+
+  String? _firstNonEmptyString(Map<Object?, Object?>? data, List<String> keys) {
+    if (data == null) return null;
+
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+      if (value is num) return value.toString();
+    }
+
+    return null;
+  }
+
+  bool _looksLikeEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
+  }
+
+  Future<void> _launchSalesPhoneChannel() async {
+    final phoneNumber = _normalizeDialNumber(_salesContactConfig.phoneDialValue);
+    if (phoneNumber.isEmpty) {
+      _showCoreFeedback('Sales phone number is not configured yet.');
+      return;
+    }
+
+    unawaited(_logSalesContactIntent('phone'));
+
+    final uri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        _showCoreFeedback('No phone app found on this device.');
+      }
+    } catch (_) {
+      if (mounted) _showCoreFeedback('Could not open the phone dialer.');
+    }
+  }
+
+  Future<void> _launchSalesMailbox() async {
+    final email = _salesContactConfig.email.trim();
+    if (!_looksLikeEmail(email)) {
+      _showCoreFeedback('Sales mailbox is not configured yet.');
+      return;
+    }
+
+    unawaited(_logSalesContactIntent('email'));
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+      query: _encodeMailtoQuery({
+        'subject': _salesContactConfig.emailSubject,
+        'body': _salesContactConfig.emailBody,
+      }),
+    );
+
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        _showCoreFeedback('No email app found on this device.');
+      }
+    } catch (_) {
+      if (mounted) _showCoreFeedback('Could not open the email app.');
+    }
+  }
+
+  String _normalizeDialNumber(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < trimmed.length; i++) {
+      final char = trimmed[i];
+      final isDigit = RegExp(r'\d').hasMatch(char);
+      if (isDigit || (char == '+' && buffer.isEmpty)) buffer.write(char);
+    }
+
+    return buffer.toString();
+  }
+
+  String _encodeMailtoQuery(Map<String, String> params) {
+    return params.entries
+        .where((entry) => entry.value.trim().isNotEmpty)
+        .map((entry) {
+      final key = Uri.encodeComponent(entry.key);
+      final value = Uri.encodeComponent(entry.value);
+      return '$key=$value';
+    })
+        .join('&');
+  }
+
+  Future<void> _logSalesContactIntent(String channel) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      await FirebaseDatabase.instance
+          .ref()
+          .child('sales_contact_events')
+          .push()
+          .set({
+        'channel': channel,
+        'userId': user?.uid,
+        'userEmail': user?.email,
+        'phone': _salesContactConfig.phoneDialValue,
+        'mailbox': _salesContactConfig.email,
+        'createdAt': ServerValue.timestamp,
+      });
+    } catch (_) {
+      // Contact launch must still work even if analytics writes are blocked.
+    }
   }
 
   Future<void> _toggleNotifications(bool value) async {
@@ -2331,14 +2551,13 @@ class _FullEnterpriseSettingsScreenState
                         color:
                             isDarkMode ? AppColors.textPrimary : Colors.black87,
                         fontWeight: FontWeight.bold)),
-                subtitle: const Text(
-                    'Tap to invoke device system dial pad launcher',
-                    style:
-                        TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                subtitle: Text(
+                    'Open phone dialer for ${_salesContactConfig.phoneDisplay}',
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
-                  _showCoreFeedback(
-                      'Invoking device dial pad context for [+92 300 1234567]...');
+                  _launchSalesPhoneChannel();
                 },
               ),
               const SizedBox(height: 8),
@@ -2350,13 +2569,12 @@ class _FullEnterpriseSettingsScreenState
                         color:
                             isDarkMode ? AppColors.textPrimary : Colors.black87,
                         fontWeight: FontWeight.bold)),
-                subtitle: const Text('Compose a direct contract transmission',
-                    style:
-                        TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                subtitle: Text('Compose email to ${_salesContactConfig.email}',
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
-                  _showCoreFeedback(
-                      'Launching local mail context to [sales@marketplace.com]...');
+                  _launchSalesMailbox();
                 },
               ),
             ],
