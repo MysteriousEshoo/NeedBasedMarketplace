@@ -143,7 +143,8 @@ class _AuthScreenState extends State<AuthScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primaryLight))
-          : Center(
+          : SafeArea(
+              child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28),
                 child: Form(
@@ -265,6 +266,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ),
               ),
+            ),
             ),
     );
   }

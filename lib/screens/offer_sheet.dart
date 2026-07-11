@@ -221,13 +221,26 @@ class _OfferSheetState extends State<OfferSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppColors.surface : Colors.white;
+    // Keyboard height — so the sheet lifts above the keyboard instead of
+    // letting it cover the Submit button.
+    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.all(24),
+      // Cap height so the sheet never exceeds the screen (respects SafeArea
+      // via the extra bottom padding on the scroll view).
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: 24 + keyboardInset,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,

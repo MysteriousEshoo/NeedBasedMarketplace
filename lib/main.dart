@@ -46,6 +46,26 @@ class NeedMarketplaceApp extends StatelessWidget {
       theme: themeProvider.currentTheme,
       darkTheme: AppTheme.dark,
       themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      // 📱 GLOBAL RESPONSIVENESS
+      // Scales all text across every screen based on device width so the UI
+      // reads well on small Androids, large Androids and iPhones alike, while
+      // clamping the user's system font setting so oversized fonts can never
+      // cause bottom-overflow. Applied app-wide — no per-screen changes needed.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        // Width-based scale against a 390px baseline (iPhone 13 / typical
+        // modern phone), gently clamped so tiny/huge devices stay balanced.
+        final double widthScale = (mq.size.width / 390).clamp(0.90, 1.12);
+        // Respect the user's accessibility font choice, but keep it inside a
+        // safe band so layouts never break.
+        final double systemScale = mq.textScaler.scale(1.0).clamp(0.85, 1.30);
+        final double finalScale = widthScale * systemScale;
+
+        return MediaQuery(
+          data: mq.copyWith(textScaler: TextScaler.linear(finalScale)),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
