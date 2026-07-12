@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart' hide Query;
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
 import '../widgets/three_d_glass_card.dart';
 import '../widgets/motion.dart';
 import '../widgets/pill_tag.dart';
 import 'offer_sheet.dart';
+import 'verify_email_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final List<legacy.Need> needs;
@@ -32,6 +34,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSellerMode = false;
   String? _currentUserId;
 
+  // Live profile bits for the greeting header.
+  String _displayName = 'User';
+  String? _photoUrl;
+  bool _emailVerified = true;
+
   final List<String> _localCategories = [
     'All',
     'Mobile Phone',
@@ -45,13 +52,84 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    _initUserBasics();
     _listenToUserRole();
+    _listenToProfile();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _initUserBasics() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _displayName = _deriveName(user);
+    if (user.photoURL != null && user.photoURL!.isNotEmpty) {
+      _photoUrl = user.photoURL;
+    }
+    // Nothing to verify for phone-only accounts; treat those as fine.
+    _emailVerified = user.emailVerified || (user.email == null);
+  }
+
+  String _deriveName(User user) {
+    if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+      return user.displayName!.trim();
+    }
+    if (user.email != null && user.email!.isNotEmpty) {
+      return user.email!.split('@').first;
+    }
+    return 'User';
+  }
+
+  /// Keeps the greeting name + avatar in sync with the live profile record so
+  /// edits made on the Profile screen show up here immediately.
+  void _listenToProfile() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseDatabase.instance
+        .ref()
+        .child('users')
+        .child(user.uid)
+        .onValue
+        .listen((event) {
+      final value = event.snapshot.value;
+      if (value is! Map || !mounted) return;
+      final data = Map<String, dynamic>.from(value);
+      final name = _firstNonEmpty(data, ['name', 'displayName']);
+      final photo = _firstNonEmpty(data, ['photoUrl', 'photoURL']);
+      setState(() {
+        if (name != null) _displayName = name;
+        if (photo != null) _photoUrl = photo;
+      });
+    });
+  }
+
+  String? _firstNonEmpty(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return null;
+  }
+
+  Future<void> _openEmailVerification() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+    );
+    // Re-read the freshest auth state whichever way the screen was closed.
+    try {
+      await FirebaseAuth.instance.currentUser?.reload();
+    } catch (_) {}
+    final user = FirebaseAuth.instance.currentUser;
+    if (!mounted) return;
+    setState(() {
+      _emailVerified =
+          (result == true) || (user?.emailVerified ?? false) || (user?.email == null);
+    });
   }
 
   void _listenToUserRole() {
@@ -118,15 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final Color textTertiary =
         isDark ? AppColors.textTertiary : const Color(0xFF94A3B8);
 
-    final user = FirebaseAuth.instance.currentUser;
-    String userName = 'User';
-    if (user != null) {
-      if (user.displayName != null && user.displayName!.isNotEmpty) {
-        userName = user.displayName!;
-      } else if (user.email != null) {
-        userName = user.email!.split('@').first;
-      }
-    }
+    final String userName = _displayName;
 
     final filteredNeeds = widget.needs.where((need) {
       if (!_isSellerMode) {
@@ -155,54 +225,68 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // Header — avatar + greeting
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text(
-                    'WELCOME BACK',
-                    style: TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    userName,
-                    style: TextStyle(
-                      color: textPrimary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _isSellerMode
-                          ? AppColors.primary.withOpacity(0.15)
-                          : AppColors.accent.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _isSellerMode ? '🔵 Seller Mode' : '🟢 Buyer Mode',
-                      style: TextStyle(
-                        color: _isSellerMode
-                            ? AppColors.primary
-                            : AppColors.accent,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  _buildHeaderAvatar(surfaceColor),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'WELCOME BACK',
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Hello, $userName 👋',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _isSellerMode
+                                ? AppColors.primary.withValues(alpha: 0.15)
+                                : AppColors.accent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _isSellerMode ? '🔵 Seller Mode' : '🟢 Buyer Mode',
+                            style: TextStyle(
+                              color: _isSellerMode
+                                  ? AppColors.primary
+                                  : AppColors.accent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+
+            // Trust banner — asks the user to verify their email.
+            if (!_emailVerified) _buildVerifyBanner(),
 
             // Search Bar
             Padding(
@@ -354,6 +438,109 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Profile picture shown next to the greeting. Falls back to the first
+  // letter of the name, then a person icon, when no photo is available.
+  Widget _buildHeaderAvatar(Color surfaceColor) {
+    final bool hasPhoto = _photoUrl != null && _photoUrl!.isNotEmpty;
+    final String initial =
+        _displayName.trim().isNotEmpty ? _displayName.trim()[0].toUpperCase() : '';
+
+    return Container(
+      padding: const EdgeInsets.all(2.5),
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.accent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: CircleAvatar(
+        radius: 26,
+        backgroundColor: surfaceColor,
+        backgroundImage: hasPhoto ? NetworkImage(_photoUrl!) : null,
+        child: hasPhoto
+            ? null
+            : (initial.isNotEmpty
+                ? Text(
+                    initial,
+                    style: const TextStyle(
+                      color: AppColors.primaryLight,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )
+                : const Icon(Icons.person_rounded,
+                    color: AppColors.primaryLight, size: 26)),
+      ),
+    );
+  }
+
+  // "Verify your email" trust prompt shown until the account is verified.
+  Widget _buildVerifyBanner() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _openEmailVerification,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.urgentMedium.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.urgentMedium.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.urgentMedium.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.gpp_maybe_rounded,
+                      color: AppColors.urgentMedium, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Verify your email',
+                        style: TextStyle(
+                          color: AppColors.urgentMedium,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Confirm your email to build trust with buyers & sellers.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios_rounded,
+                    color: AppColors.urgentMedium, size: 14),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
