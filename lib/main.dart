@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'screens/main_shell.dart';
 import 'screens/auth_screen.dart';
+import 'screens/role_selection_screen.dart';
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
@@ -70,18 +72,84 @@ class NeedMarketplaceApp extends StatelessWidget {
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
+            return const _SplashLoader();
           }
 
           if (snapshot.hasData) {
-            return const MainShell();
+            // 🧭 ONBOARDING GATE
+            // New signups carry `roleSelected: false` in their user doc and
+            // must pick Buyer/Seller first (inDrive style). Existing users
+            // (flag absent or true) go straight to the shell — unchanged.
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(snapshot.data!.uid)
+                  .snapshots(),
+              builder: (context, docSnap) {
+                if (docSnap.connectionState == ConnectionState.waiting) {
+                  return const _SplashLoader();
+                }
+                final data = docSnap.data?.data();
+                if (docSnap.hasData &&
+                    docSnap.data!.exists &&
+                    data?['roleSelected'] == false) {
+                  return const RoleSelectionScreen();
+                }
+                if (docSnap.hasData && !docSnap.data!.exists) {
+                  // Doc still being written during signup — brief wait so a
+                  // brand-new user never flashes MainShell before the role
+                  // screen. Legacy users without a doc fall through after
+                  // the timeout.
+                  return const _DocPendingSplash();
+                }
+                return const MainShell();
+              },
+            );
           }
 
           return const AuthScreen();
         },
       ),
     );
+  }
+}
+
+/// Branded loading screen used while auth / profile state resolves.
+class _SplashLoader extends StatelessWidget {
+  const _SplashLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+/// Shown when the user is authenticated but their Firestore profile document
+/// hasn't landed yet (signup write in flight). If the doc never appears
+/// (legacy account), falls back to MainShell after a short timeout.
+class _DocPendingSplash extends StatefulWidget {
+  const _DocPendingSplash();
+
+  @override
+  State<_DocPendingSplash> createState() => _DocPendingSplashState();
+}
+
+class _DocPendingSplashState extends State<_DocPendingSplash> {
+  bool _timedOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _timedOut = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_timedOut) return const MainShell();
+    return const _SplashLoader();
   }
 }

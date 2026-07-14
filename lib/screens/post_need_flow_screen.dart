@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:uuid/uuid.dart';
 import '../models/need_model.dart';
+import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../widgets/primary_loading_button.dart';
@@ -200,6 +201,14 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
       final DatabaseReference newNeedRef = dbRef.push();
       await newNeedRef.set(needData);
       _lastPostedNeedRef = newNeedRef;
+
+      // 📜 History: record the posted need (fire-and-forget).
+      HistoryService.log(
+        type: HistoryService.typeNeedPosted,
+        title: _titleController.text.trim(),
+        subtitle: _selectedCategory ?? 'General',
+        refId: newNeedRef.key,
+      );
 
       if (!mounted) return;
       setState(() => _isPublishing = false);

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/need_model.dart';
+import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
@@ -35,6 +36,15 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
     _need = widget.need;
     _listenUserRole();
     _findChatSeller();
+
+    // 📜 Chrome-style history: record that this need was visited.
+    // Fire-and-forget — never affects the screen itself.
+    HistoryService.log(
+      type: HistoryService.typeNeedVisited,
+      title: _need.title,
+      subtitle: _need.category,
+      refId: _need.id,
+    );
   }
 
   void _listenUserRole() {

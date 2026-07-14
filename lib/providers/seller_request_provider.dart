@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 
 import '../models/seller_request_model.dart';
 import '../services/notification_service.dart';
+import '../services/history_service.dart';
 
 /// Watches the current user's seller-registration request in Realtime DB at
 /// `seller_requests/{uid}` and keeps the app in sync with its approval status.
@@ -108,6 +109,14 @@ class SellerRequestProvider extends ChangeNotifier {
         .child('seller_requests')
         .child(user.uid)
         .set(request.toMap());
+
+    // 📜 History: record the submitted seller request (fire-and-forget).
+    HistoryService.log(
+      type: HistoryService.typeSellerRequest,
+      title: 'Seller request submitted',
+      subtitle: '$businessName • $category',
+      refId: user.uid,
+    );
   }
 
   /// When the owner approves/rejects the request, notify the user exactly once.

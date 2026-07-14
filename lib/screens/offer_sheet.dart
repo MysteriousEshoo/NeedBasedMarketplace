@@ -6,6 +6,7 @@ import '../models/offer_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../services/notification_service.dart';
+import '../services/history_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
 
@@ -123,6 +124,15 @@ class _OfferSheetState extends State<OfferSheet> {
           .push();
 
       await offerRef.set(offer.toMap());
+
+      // 📜 History: record this sent offer (fire-and-forget).
+      HistoryService.log(
+        type: HistoryService.typeOfferSent,
+        title: widget.need.title,
+        subtitle:
+            'Offer: PKR ${_priceController.text.trim()} • Delivery: $deliveryTime',
+        refId: widget.need.id,
+      );
 
       final needRef = FirebaseDatabase.instance
           .ref()

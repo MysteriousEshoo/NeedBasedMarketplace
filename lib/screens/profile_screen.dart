@@ -21,6 +21,8 @@ import '../providers/theme_provider.dart';
 import '../widgets/motion.dart';
 import 'marketplace_mode_screen.dart';
 import 'auth_screen.dart';
+import 'verify_email_screen.dart';
+import 'history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -40,12 +42,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   File? _selectedLocalImage;
   bool _isProfileLoading = true;
   bool _isUploadingAvatar = false;
+  bool _isEmailVerified = false;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _fetchMyNeedsCount();
+    _refreshEmailVerification();
+  }
+
+  /// Pulls the latest emailVerified flag from Firebase Auth (the user may
+  /// have verified from another screen or device since last reload).
+  Future<void> _refreshEmailVerification() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _isEmailVerified = user.emailVerified;
+    try {
+      await user.reload();
+      if (!mounted) return;
+      setState(() => _isEmailVerified =
+          FirebaseAuth.instance.currentUser?.emailVerified ?? false);
+    } catch (_) {
+      // Keep the cached value if the reload fails (e.g. offline).
+    }
+  }
+
+  Future<void> _openEmailVerificationFlow() async {
+    final verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const VerifyEmailScreen()),
+    );
+    if (!mounted) return;
+    if (verified == true) {
+      setState(() => _isEmailVerified = true);
+    } else {
+      _refreshEmailVerification();
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -745,20 +778,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          ShaderMask(
-            shaderCallback: (bounds) => LinearGradient(
-              colors: isDark
-                  ? [AppColors.textPrimary, AppColors.primaryLight]
-                  : [const Color(0xFF0F172A), AppColors.primary],
-            ).createShader(bounds),
-            child: Text(
-              _currentUserName,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  fontSize: 24,
-                  letterSpacing: -0.5),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: ShaderMask(
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: isDark
+                        ? [AppColors.textPrimary, AppColors.primaryLight]
+                        : [const Color(0xFF0F172A), AppColors.primary],
+                  ).createShader(bounds),
+                  child: Text(
+                    _currentUserName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        fontSize: 24,
+                        letterSpacing: -0.5),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildVerifiedBadge(),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -768,6 +812,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 fontWeight: FontWeight.w500,
                 fontSize: 13),
           ),
+          if (_profilePhone.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.phone_rounded, size: 13, color: textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  _profilePhone,
+                  style: TextStyle(
+                      color: textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12),
+                ),
+              ],
+            ),
+          ],
           if (_profileCity.isNotEmpty || _profileBio.isNotEmpty) ...[
             const SizedBox(height: 8),
             if (_profileCity.isNotEmpty)
@@ -809,6 +870,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// ✅ Real email-verification badge (same verification feature that runs
+  /// from the home banner — reuses [VerifyEmailScreen]). Tapping the amber
+  /// "Not verified" pill opens the verification flow.
+  Widget _buildVerifiedBadge() {
+    final Color color =
+        _isEmailVerified ? AppColors.accent : AppColors.urgentMedium;
+    return GestureDetector(
+      onTap: _isEmailVerified ? null : _openEmailVerificationFlow,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.55)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _isEmailVerified
+                  ? Icons.verified_rounded
+                  : Icons.error_outline_rounded,
+              size: 13,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              _isEmailVerified ? 'Verified' : 'Not verified',
+              style: TextStyle(
+                  color: color, fontSize: 10.5, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatsRow({
     required Color surface,
     required Color border,
@@ -824,8 +922,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               '$_myNeedsCount', surface, border, textPrimary, textTertiary),
           _buildStatCard(Icons.handshake_rounded, 'Active Offers', '3', surface,
               border, textPrimary, textTertiary),
-          _buildStatCard(Icons.verified_user_rounded, 'Status', 'Verified User',
-              surface, border, textPrimary, textTertiary),
+          _buildStatCard(
+              _isEmailVerified
+                  ? Icons.verified_user_rounded
+                  : Icons.gpp_maybe_rounded,
+              'Status',
+              _isEmailVerified ? 'Verified' : 'Unverified',
+              surface,
+              border,
+              textPrimary,
+              textTertiary),
         ],
       ),
     );
@@ -2024,6 +2130,32 @@ class _FullEnterpriseSettingsScreenState
             currentBorder,
             currentText,
             currentSubText,
+          ),
+          _buildSectionHeader('📜 ACTIVITY'),
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+                color: currentSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: currentBorder)),
+            child: ListTile(
+              leading: const Icon(Icons.history_rounded,
+                  color: AppColors.primaryLight, size: 20),
+              title: Text('History',
+                  style: TextStyle(
+                      color: currentText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+              subtitle: Text('Offers sent, requests & needs you visited',
+                  style: TextStyle(color: currentSubText, fontSize: 11)),
+              trailing: Icon(Icons.keyboard_arrow_right_rounded,
+                  color: context.palette.textTertiary, size: 18),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                );
+              },
+            ),
           ),
           _buildSectionHeader('💳 PAYMENTS'),
           Container(

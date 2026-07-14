@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
 import 'main_shell.dart';
+import 'role_selection_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -52,8 +53,14 @@ class _AuthScreenState extends State<AuthScreen> {
           'name': _nameController.text.trim(),
           'email': _emailController.text.trim(),
           'isSellerMode': false,
+          // 🧭 New signups must pick Buyer/Seller first (inDrive style).
+          'roleSelected': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        if (!mounted) return;
+        _navigateToRoleSelection();
+        return;
       } else {
         await auth.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
@@ -99,13 +106,20 @@ class _AuthScreenState extends State<AuthScreen> {
         final userDoc = await firestore.collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
+          // First-time Google user → treat as a fresh signup and ask the
+          // Buyer/Seller question (inDrive style).
           await firestore.collection('users').doc(user.uid).set({
             'uid': user.uid,
             'name': user.displayName ?? 'Google Account User',
             'email': user.email,
             'isSellerMode': false,
+            'roleSelected': false,
             'createdAt': FieldValue.serverTimestamp(),
           });
+
+          if (!mounted) return;
+          _navigateToRoleSelection();
+          return;
         }
 
         if (!mounted) return;
@@ -123,6 +137,13 @@ class _AuthScreenState extends State<AuthScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const MainShell()),
+    );
+  }
+
+  void _navigateToRoleSelection() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
     );
   }
 

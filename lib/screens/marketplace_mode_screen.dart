@@ -142,6 +142,125 @@ class _MarketplaceModeScreenState extends State<MarketplaceModeScreen> {
         break;
       case SellerRequestStatus.rejected:
       case SellerRequestStatus.none:
+        await _showSellerAccountDialog(status, settingsProvider);
+        break;
+    }
+  }
+
+  /// 🧭 inDrive-style pre-check before seller registration:
+  /// "Already have a seller account?" vs "Request a seller account".
+  Future<void> _showSellerAccountDialog(
+    SellerRequestStatus status,
+    SettingsProvider settingsProvider,
+  ) async {
+    final bool isDark =
+        Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+    final Color surface = isDark ? AppColors.surface : Colors.white;
+    final Color textPrimary =
+        isDark ? AppColors.textPrimary : Colors.black87;
+    final Color textSecondary =
+        isDark ? AppColors.textSecondary : Colors.black54;
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: surface,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.storefront_rounded,
+                  color: AppColors.primaryLight, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('Switch to Seller',
+                  style: TextStyle(
+                      color: textPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17)),
+            ),
+          ],
+        ),
+        content: Text(
+          'Do you already have a seller account, or would you like to request one?',
+          style: TextStyle(color: textSecondary, fontSize: 13),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => Navigator.pop(dialogContext, 'existing'),
+              child: const Text('I already have a seller account',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primaryLight),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => Navigator.pop(dialogContext, 'request'),
+              child: Text('Don\'t have one? Request seller account',
+                  style: TextStyle(
+                      color: textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || choice == null) return;
+
+    if (choice == 'request') {
+      await _openSellerRegistration();
+      return;
+    }
+
+    // "I already have a seller account" → re-check the LIVE status (the
+    // provider streams RTDB, so approval may have landed since build).
+    final liveStatus = context.read<SellerRequestProvider>().status;
+    switch (liveStatus) {
+      case SellerRequestStatus.approved:
+        await _toggleSellerMode(true);
+        await settingsProvider.setBuyerMode(false);
+        break;
+      case SellerRequestStatus.pending:
+        _showCoreFeedback(
+            '⏳ Your seller request is under review. Please wait for approval.');
+        break;
+      case SellerRequestStatus.rejected:
+        _showCoreFeedback(
+            '❌ Your previous request was rejected. You can re-apply below.');
+        await _openSellerRegistration();
+        break;
+      case SellerRequestStatus.none:
+        _showCoreFeedback(
+            'ℹ️ No seller account found for this user. Please request one.');
         await _openSellerRegistration();
         break;
     }
