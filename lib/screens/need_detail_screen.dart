@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/pill_tag.dart';
 import 'offer_sheet.dart';
@@ -188,7 +189,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 18),
                   decoration: BoxDecoration(
-                    color: AppColors.textTertiary.withOpacity(0.4),
+                    color: context.palette.textTertiary.withOpacity(0.4),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -384,7 +385,7 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                 isSaved
                     ? Icons.bookmark_rounded
                     : Icons.bookmark_border_rounded,
-                color: isSaved ? AppColors.accent : AppColors.textSecondary,
+                color: isSaved ? AppColors.accent : context.palette.textSecondary,
               ),
               onPressed: () async {
                 final user = FirebaseAuth.instance.currentUser;
@@ -443,12 +444,12 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
             style: TextStyle(
                 fontWeight: FontWeight.w700, fontSize: 15, color: textPrimary)),
         Row(children: [
-          const Icon(Icons.schedule_rounded,
-              size: 13, color: AppColors.textSecondary),
+          Icon(Icons.schedule_rounded,
+              size: 13, color: textSecondary),
           const SizedBox(width: 4),
           Text('Posted ${_need.timeElapsed}',
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 12)),
+              style: TextStyle(
+                  color: textSecondary, fontSize: 12)),
         ]),
       ]),
     ]);
@@ -591,7 +592,7 @@ class _SquareIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: context.palette.surface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -601,7 +602,7 @@ class _SquareIconButton extends StatelessWidget {
           width: 54,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border, width: 1.4),
+            border: Border.all(color: context.palette.border, width: 1.4),
           ),
           child: Icon(icon, color: AppColors.primary),
         ),

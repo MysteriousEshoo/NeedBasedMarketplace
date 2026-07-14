@@ -16,6 +16,7 @@ import '../providers/theme_provider.dart';
 import '../services/chat_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/voice_message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -49,6 +50,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   late final Stream<OfferModel?> _offerStream;
+  late final Stream<List<MessageModel>> _messagesStream;
 
   bool _isSending = false;
   bool _hasText = false;
@@ -63,6 +65,13 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _offerStream = _chatService.watchOfferForChat(
+      needId: widget.needId,
+      otherUserId: widget.otherUserId,
+    );
+    // Created once here — NOT inside build(). Building it in build() spawned a
+    // brand-new stream on every offer-stream emit, resetting connectionState to
+    // `waiting` and flashing the loading spinner over the messages repeatedly.
+    _messagesStream = _chatService.getMessages(
       needId: widget.needId,
       otherUserId: widget.otherUserId,
     );
@@ -420,9 +429,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showFilePicker() {
+    final c = context.palette;
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: c.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -436,17 +446,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: 44,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: c.border,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Share File',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+                  color: c.textPrimary,
                 ),
               ),
               const SizedBox(height: 18),
@@ -803,12 +813,14 @@ class _ChatScreenState extends State<ChatScreen> {
               if (offer != null) _buildOfferStatusBanner(offer),
               Expanded(
                 child: StreamBuilder<List<MessageModel>>(
-                  stream: _chatService.getMessages(
-                    needId: widget.needId,
-                    otherUserId: widget.otherUserId,
-                  ),
+                  stream: _messagesStream,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    // Only show the spinner on the very first load, while we
+                    // have no data at all. Once messages have arrived we keep
+                    // showing them across refreshes instead of flashing the
+                    // loader again.
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData) {
                       return const Center(
                         child: CircularProgressIndicator(
                           color: AppColors.primaryLight,
@@ -855,6 +867,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
               _buildComposer(
+                context,
                 composerBg,
                 inputFill,
                 isDark,
@@ -945,8 +958,8 @@ class _ChatScreenState extends State<ChatScreen> {
             '${offer.sellerName} - Delivery: ${offer.deliveryTime}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: context.palette.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -1026,10 +1039,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     fontSize: 15,
                   ),
                 ),
-                const Text(
+                Text(
                   'NeedHub',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.palette.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -1077,6 +1090,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildEmptyState() {
+    final c = context.palette;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1095,19 +1109,19 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Start the conversation!',
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: c.textPrimary,
               fontSize: 16,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'Say hello to ${widget.otherUserName}',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: c.textSecondary,
               fontSize: 13,
             ),
           ),
@@ -1117,6 +1131,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildComposer(
+    BuildContext context,
     Color bg,
     Color inputFill,
     bool isDark, {
@@ -1140,8 +1155,8 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Text(
             _disabledMessage(offer),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: context.palette.textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -1151,7 +1166,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (_isInlineRecording) {
-      return _buildRecordingComposer(bg, isDark);
+      return _buildRecordingComposer(context, bg, isDark);
     }
 
     return Container(
@@ -1259,7 +1274,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildRecordingComposer(Color bg, bool isDark) {
+  Widget _buildRecordingComposer(BuildContext context, Color bg, bool isDark) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
@@ -1304,18 +1319,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     const SizedBox(width: 8),
                     Text(
                       _formatDuration(_inlineRecordingDuration),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: context.palette.textPrimary,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Recording',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: AppColors.textSecondary),
+                        style: TextStyle(color: context.palette.textSecondary),
                       ),
                     ),
                   ],
@@ -1330,7 +1345,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 height: 46,
                 width: 46,
                 decoration: BoxDecoration(
-                  color: _isSending ? AppColors.border : AppColors.accent,
+                  color: _isSending ? context.palette.border : AppColors.accent,
                   shape: BoxShape.circle,
                 ),
                 child: _isSending
@@ -1475,7 +1490,7 @@ class _ChatBubble extends StatelessWidget {
             maxWidth: MediaQuery.of(context).size.width * 0.8,
           ),
           decoration: BoxDecoration(
-            color: isMe ? AppColors.primary : AppColors.surface,
+            color: isMe ? AppColors.primary : context.palette.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: AppColors.accent.withOpacity(0.3),
@@ -1507,7 +1522,7 @@ class _ChatBubble extends StatelessWidget {
               Text(
                 message.content,
                 style: TextStyle(
-                  color: isMe ? Colors.white : AppColors.textPrimary,
+                  color: isMe ? Colors.white : context.palette.textPrimary,
                   fontSize: 15,
                 ),
               ),
@@ -1693,7 +1708,7 @@ class _AttachmentBubble extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: isMe ? Colors.white : AppColors.textPrimary,
+                            color: isMe ? Colors.white : context.palette.textPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),
@@ -1705,7 +1720,7 @@ class _AttachmentBubble extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color:
-                                isMe ? Colors.white70 : AppColors.textSecondary,
+                                isMe ? Colors.white70 : context.palette.textSecondary,
                             fontSize: 11,
                           ),
                         ),
@@ -1738,7 +1753,7 @@ class _BubbleMeta extends StatelessWidget {
         Text(
           message.formattedTime,
           style: TextStyle(
-            color: isMe ? Colors.white60 : AppColors.textTertiary,
+            color: isMe ? Colors.white60 : context.palette.textTertiary,
             fontSize: 10,
           ),
         ),
@@ -1800,19 +1815,19 @@ class _DateSeparator extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          const Expanded(child: Divider(color: AppColors.border)),
+          Expanded(child: Divider(color: context.palette.border)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
               _label,
-              style: const TextStyle(
-                color: AppColors.textTertiary,
+              style: TextStyle(
+                color: context.palette.textTertiary,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const Expanded(child: Divider(color: AppColors.border)),
+          Expanded(child: Divider(color: context.palette.border)),
         ],
       ),
     );
@@ -1832,7 +1847,7 @@ class _ComposerIcon extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Icon(icon, color: AppColors.textSecondary, size: 22),
+        child: Icon(icon, color: context.palette.textSecondary, size: 22),
       ),
     );
   }
@@ -1906,9 +1921,9 @@ class _DetailsSheet extends StatelessWidget {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          decoration: BoxDecoration(
+            color: context.palette.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: ListView(
             controller: scrollController,
@@ -1919,7 +1934,7 @@ class _DetailsSheet extends StatelessWidget {
                   width: 44,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: context.palette.border,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -1940,8 +1955,8 @@ class _DetailsSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: context.palette.textPrimary,
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1973,17 +1988,17 @@ class _DetailRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted.withOpacity(0.7),
+        color: context.palette.surfaceMuted.withOpacity(0.7),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.textTertiary,
+            style: TextStyle(
+              color: context.palette.textTertiary,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -1991,8 +2006,8 @@ class _DetailRow extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             displayValue,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: TextStyle(
+              color: context.palette.textPrimary,
               fontSize: 14,
               height: 1.35,
               fontWeight: FontWeight.w600,

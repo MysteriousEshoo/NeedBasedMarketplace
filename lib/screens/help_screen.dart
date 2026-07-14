@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
 
 // ✅ Class name HelpScreen (aapki file ke mutabiq)
@@ -342,6 +343,7 @@ class _HelpScreenState extends State<HelpScreen> {
   }
 
   Widget _buildEmptyState() {
+    final c = context.palette;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -349,30 +351,30 @@ class _HelpScreenState extends State<HelpScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: c.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: c.border),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.help_outline_rounded,
               size: 48,
-              color: AppColors.textTertiary,
+              color: c.textTertiary,
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No FAQs Available',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: c.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Check back later for help articles.',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: c.textSecondary,
               fontSize: 14,
             ),
           ),
@@ -437,6 +439,7 @@ class _FAQCardState extends State<FAQCard> {
         widget.isDarkMode ? AppColors.textSecondary : Colors.black54;
     final Color borderColor =
         widget.isDarkMode ? AppColors.border : const Color(0xFFE2E8F0);
+    final c = context.palette;
 
     return Container(
       decoration: BoxDecoration(
@@ -489,7 +492,7 @@ class _FAQCardState extends State<FAQCard> {
                   _isExpanded
                       ? Icons.keyboard_arrow_up_rounded
                       : Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textTertiary,
+                  color: c.textTertiary,
                 ),
               ],
             ),

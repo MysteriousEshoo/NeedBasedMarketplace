@@ -14,5 +14,9 @@
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- The app controls its own light/dark theme. Opt out of the OEM
+             "force dark" auto-inversion (Infinix / itel / Oppo ColorOS etc.)
+             so the OS never re-tints our widgets and breaks the palette. -->
+        <item name="android:forceDarkAllowed">false</item>
     </style>
 </resources>

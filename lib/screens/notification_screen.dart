@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/notification_service.dart';
 import '../models/notification_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
 import 'chat_screen.dart';
 
@@ -59,6 +60,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
     final Color bg = isDark ? AppColors.background : const Color(0xFFF1F5F9);
@@ -153,7 +155,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   Text(
                     'You\'re all caught up!',
                     style: TextStyle(
-                      color: AppColors.textTertiary,
+                      color: c.textTertiary,
                       fontSize: 13,
                     ),
                   ),
@@ -275,6 +277,7 @@ class _NotificationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     final isSeen = notification.seen;
 
     return InkWell(
@@ -331,7 +334,7 @@ class _NotificationTile extends StatelessWidget {
                   Text(
                     notification.formattedTime,
                     style: TextStyle(
-                      color: AppColors.textTertiary,
+                      color: c.textTertiary,
                       fontSize: 11,
                     ),
                   ),

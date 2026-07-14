@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../providers/payment_provider.dart';
 import '../providers/theme_provider.dart';
 
@@ -330,7 +331,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                         height: 5,
                         width: 44,
                         decoration: BoxDecoration(
-                          color: AppColors.border,
+                          color: context.palette.border,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -438,8 +439,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                         hintText: isLocal
                             ? 'Enter 9-16 digits'
                             : 'example@domain.com',
-                        hintStyle: const TextStyle(
-                            color: AppColors.textTertiary, fontSize: 12),
+                        hintStyle: TextStyle(
+                            color: context.palette.textTertiary, fontSize: 12),
                         errorText: _accountError,
                         errorStyle: const TextStyle(
                           color: AppColors.urgentHigh,
@@ -488,7 +489,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _isVerifying
-                              ? AppColors.textTertiary
+                              ? context.palette.textTertiary
                               : AppColors.primary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -541,8 +542,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                               isLocal
                                   ? 'Your bank account will be verified in real-time.'
                                   : 'Your platform account will be verified via email.',
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
+                              style: TextStyle(
+                                color: context.palette.textSecondary,
                                 fontSize: 12,
                               ),
                             ),
@@ -561,7 +562,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   // ✅ BUILD BANK ACCOUNT CARD WITH DELETE OPTION
-  Widget _buildBankAccountCard(BankAccount account, bool isDarkMode) {
+  Widget _buildBankAccountCard(
+      BuildContext context, BankAccount account, bool isDarkMode) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -677,7 +679,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: context.palette.border),
                     ),
                   ),
                 ),
@@ -695,7 +697,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: context.palette.border),
                     ),
                   ),
                 ),
@@ -880,8 +882,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       ),
                       Text(
                         '${localBanks.length} linked',
-                        style: const TextStyle(
-                          color: AppColors.textTertiary,
+                        style: TextStyle(
+                          color: context.palette.textTertiary,
                           fontSize: 11,
                         ),
                       ),
@@ -889,7 +891,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   ),
                   const SizedBox(height: 10),
                   ...localBanks
-                      .map((bank) => _buildBankAccountCard(bank, isDarkMode)),
+                      .map((bank) =>
+                          _buildBankAccountCard(context, bank, isDarkMode)),
                   const SizedBox(height: 20),
                 ],
 
@@ -909,8 +912,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       ),
                       Text(
                         '${foreignBanks.length} linked',
-                        style: const TextStyle(
-                          color: AppColors.textTertiary,
+                        style: TextStyle(
+                          color: context.palette.textTertiary,
                           fontSize: 11,
                         ),
                       ),
@@ -918,7 +921,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   ),
                   const SizedBox(height: 10),
                   ...foreignBanks
-                      .map((bank) => _buildBankAccountCard(bank, isDarkMode)),
+                      .map((bank) =>
+                          _buildBankAccountCard(context, bank, isDarkMode)),
                   const SizedBox(height: 20),
                 ],
 
@@ -947,10 +951,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                                 size: 28,
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'Add Local Bank',
                                 style: TextStyle(
-                                  color: AppColors.textPrimary,
+                                  color: context.palette.textPrimary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
                                 ),
@@ -983,10 +987,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                                 size: 28,
                               ),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                 'Add Foreign Bank',
                                 style: TextStyle(
-                                  color: AppColors.textPrimary,
+                                  color: context.palette.textPrimary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
                                 ),
@@ -1016,12 +1020,12 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                           color: AppColors.primary, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: const Text(
+                        child: Text(
                           'You can add multiple bank accounts. '
                           'Set one as default for faster payments. '
                           'Local banks for PKR, Foreign for international transfers.',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: context.palette.textSecondary,
                             fontSize: 12,
                             height: 1.5,
                           ),

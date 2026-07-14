@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import '../models/message_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final MessageModel message;
@@ -83,6 +84,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     final isMe = widget.isMe;
     final bubbleBg = widget.bubbleBg;
     final totalSeconds = _total.inSeconds > 0
@@ -132,7 +134,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                         minHeight: 3,
                         backgroundColor: isMe
                             ? Colors.white24
-                            : AppColors.border,
+                            : c.border,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           isMe ? Colors.white : AppColors.primary,
                         ),
@@ -149,7 +151,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                                 : Duration(seconds: totalSeconds),
                           ),
                           style: TextStyle(
-                            color: isMe ? Colors.white70 : AppColors.textSecondary,
+                            color: isMe ? Colors.white70 : c.textSecondary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -157,7 +159,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                         Text(
                           widget.message.formattedTime,
                           style: TextStyle(
-                            color: isMe ? Colors.white60 : AppColors.textTertiary,
+                            color: isMe ? Colors.white60 : c.textTertiary,
                             fontSize: 10,
                           ),
                         ),

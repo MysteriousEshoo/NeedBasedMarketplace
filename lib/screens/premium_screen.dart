@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/primary_loading_button.dart';
 
 class PremiumPurchaseResult {
@@ -456,10 +457,11 @@ class _HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
       ),
@@ -483,10 +485,10 @@ class _HeaderCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Boost your need',
                   style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color: c.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                   ),
@@ -498,8 +500,8 @@ class _HeaderCard extends StatelessWidget {
                       : needTitle!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: c.textSecondary,
                     fontSize: 13,
                     height: 1.35,
                   ),
@@ -520,10 +522,11 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     return Text(
       text,
-      style: const TextStyle(
-        color: AppColors.textPrimary,
+      style: TextStyle(
+        color: c.textPrimary,
         fontSize: 16,
         fontWeight: FontWeight.w800,
       ),
@@ -544,6 +547,7 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -553,10 +557,10 @@ class _PlanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? plan.accent.withValues(alpha: 0.12)
-              : AppColors.surface,
+              : c.surface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? plan.accent : AppColors.border,
+            color: selected ? plan.accent : c.border,
             width: selected ? 2 : 1.2,
           ),
         ),
@@ -570,8 +574,8 @@ class _PlanCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     plan.name,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: c.textPrimary,
                       fontSize: 17,
                       fontWeight: FontWeight.w900,
                     ),
@@ -617,8 +621,8 @@ class _PlanCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         benefit,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: c.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -649,15 +653,16 @@ class _ToggleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     return InkWell(
       onTap: () => onChanged(!value),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: c.border),
         ),
         child: Row(
           children: [
@@ -666,8 +671,8 @@ class _ToggleTile extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: c.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -691,12 +696,13 @@ class _CheckoutSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: c.surfaceMuted,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
@@ -708,15 +714,15 @@ class _CheckoutSummary extends StatelessWidget {
               children: [
                 Text(
                   plan.name,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: c.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 Text(
                   '${plan.days} days premium visibility',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: c.textSecondary,
                     fontSize: 12,
                   ),
                 ),

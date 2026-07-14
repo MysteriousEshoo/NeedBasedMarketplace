@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_database/firebase_database.dart' hide Query;
+import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/three_d_glass_card.dart';
 import '../widgets/motion.dart';
 import '../widgets/pill_tag.dart';
@@ -15,11 +15,16 @@ class HomeScreen extends StatefulWidget {
   final int postSignal;
   final void Function(legacy.Need need) onOpenDetail;
 
+  /// Role is owned by [MainShell] (single source of truth) and passed down so
+  /// the greeting badge here and the post FAB in the shell can never disagree.
+  final bool isSellerMode;
+
   const HomeScreen({
     super.key,
     required this.needs,
     required this.postSignal,
     required this.onOpenDetail,
+    required this.isSellerMode,
   });
 
   @override
@@ -31,7 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  bool _isSellerMode = false;
   String? _currentUserId;
 
   // Live profile bits for the greeting header.
@@ -53,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
     _initUserBasics();
-    _listenToUserRole();
     _listenToProfile();
   }
 
@@ -132,26 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _listenToUserRole() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.exists && snapshot.data() != null) {
-        final data = snapshot.data()!;
-        if (mounted) {
-          setState(() {
-            _isSellerMode = data['isSellerMode'] ?? false;
-          });
-        }
-      }
-    });
-  }
-
   void _makeOffer(legacy.Need need) {
     showModalBottomSheet(
       context: context,
@@ -199,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final String userName = _displayName;
 
     final filteredNeeds = widget.needs.where((need) {
-      if (!_isSellerMode) {
+      if (!widget.isSellerMode) {
         final String authorId = need.authorId ?? need.userId ?? '';
         if (authorId != _currentUserId) {
           return false;
@@ -262,15 +245,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _isSellerMode
+                            color: widget.isSellerMode
                                 ? AppColors.primary.withValues(alpha: 0.15)
                                 : AppColors.accent.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            _isSellerMode ? '🔵 Seller Mode' : '🟢 Buyer Mode',
+                            widget.isSellerMode ? '🔵 Seller Mode' : '🟢 Buyer Mode',
                             style: TextStyle(
-                              color: _isSellerMode
+                              color: widget.isSellerMode
                                   ? AppColors.primary
                                   : AppColors.accent,
                               fontSize: 10,
@@ -392,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            _isSellerMode
+                            widget.isSellerMode
                                 ? Icons.search_off_rounded
                                 : Icons.hourglass_empty_rounded,
                             size: 48,
@@ -400,7 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            _isSellerMode
+                            widget.isSellerMode
                                 ? 'No needs available'
                                 : 'You haven\'t posted any needs yet',
                             style: TextStyle(
@@ -411,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _isSellerMode
+                            widget.isSellerMode
                                 ? 'Check back later for new requests'
                                 : 'Tap + to post your first need',
                             style: TextStyle(
@@ -510,11 +493,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: AppColors.urgentMedium, size: 20),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Verify your email',
                         style: TextStyle(
                           color: AppColors.urgentMedium,
@@ -522,13 +505,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
                         'Confirm your email to build trust with buyers & sellers.',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
@@ -675,7 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              if (_isSellerMode) ...[
+              if (widget.isSellerMode) ...[
                 const SizedBox(width: 12),
                 GestureDetector(
                   onTap: () => _makeOffer(need),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../models/need_model.dart';
 import '../models/offer_model.dart';
 import '../repositories/marketplace_repository.dart';
@@ -181,8 +182,10 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
       }
     }
 
+    final c = context.palette;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: c.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,8 +207,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                   const SizedBox(height: 4),
                   Text(
                     userName,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: c.textPrimary,
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
                     ),
@@ -232,18 +235,18 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(
+                          const CircularProgressIndicator(
                             color: AppColors.primaryLight,
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           Text(
                             'Loading needs...',
                             style: TextStyle(
-                              color: AppColors.textSecondary,
+                              color: c.textSecondary,
                               fontSize: 14,
                             ),
                           ),
@@ -273,7 +276,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                               Text(
                                 _error!,
                                 style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: c.textSecondary,
                                   fontSize: 13,
                                 ),
                                 textAlign: TextAlign.center,
@@ -293,29 +296,29 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                           ),
                         )
                       : _needs.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.inbox_rounded,
                                     size: 48,
-                                    color: AppColors.textTertiary,
+                                    color: c.textTertiary,
                                   ),
-                                  SizedBox(height: 16),
+                                  const SizedBox(height: 16),
                                   Text(
                                     'No needs available from other users',
                                     style: TextStyle(
-                                      color: AppColors.textSecondary,
+                                      color: c.textSecondary,
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  SizedBox(height: 8),
+                                  const SizedBox(height: 8),
                                   Text(
                                     'Check back later for new requests',
                                     style: TextStyle(
-                                      color: AppColors.textTertiary,
+                                      color: c.textTertiary,
                                       fontSize: 13,
                                     ),
                                   ),
@@ -327,7 +330,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                               padding: const EdgeInsets.all(16),
                               itemBuilder: (context, index) {
                                 final need = _needs[index];
-                                return _buildNeedCard(need);
+                                return _buildNeedCard(need, c);
                               },
                             ),
             ),
@@ -337,11 +340,11 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
     );
   }
 
-  Widget _buildNeedCard(Need need) {
+  Widget _buildNeedCard(Need need, AppPalette c) {
     return GestureDetector(
       onTap: () => _openNeedDetail(need),
       child: Card(
-        color: AppColors.surface,
+        color: c.surface,
         margin: const EdgeInsets.only(bottom: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -376,8 +379,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                 const SizedBox(height: 6),
                 Text(
                   'Company: ${need.companyName}',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: c.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                   ),
@@ -386,8 +389,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
               const SizedBox(height: 8),
               Text(
                 'Condition: ${need.condition?.label ?? 'N/A'} | Payment: ${need.paymentMethod?.label ?? 'N/A'}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: c.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -396,8 +399,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                 need.description,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: c.textPrimary,
                   height: 1.4,
                   fontSize: 13,
                 ),
@@ -405,8 +408,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
               const SizedBox(height: 8),
               Text(
                 'Posted ${need.timeElapsed}',
-                style: const TextStyle(
-                  color: AppColors.textTertiary,
+                style: TextStyle(
+                  color: c.textTertiary,
                   fontSize: 11,
                 ),
               ),

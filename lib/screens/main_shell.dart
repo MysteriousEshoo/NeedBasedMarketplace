@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
 import '../services/notification_service.dart';
 import 'home_screen.dart';
@@ -231,6 +232,7 @@ class _MainShellState extends State<MainShell> {
                           needs: liveNeeds,
                           postSignal: _postSignal,
                           onOpenDetail: _openDetail,
+                          isSellerMode: _isSellerModeActive,
                         ),
               _SavedNeedsTab(onOpenDetail: _openDetail),
               const SizedBox.shrink(),
@@ -516,7 +518,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.primary : AppColors.textTertiary;
+    final color = selected ? AppColors.primary : context.palette.textTertiary;
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -598,7 +600,7 @@ class _PlaceholderTab extends StatelessWidget {
                 message,
                 textAlign: TextAlign.center,
                 style: textTheme.bodyLarge
-                    ?.copyWith(color: AppColors.textSecondary, height: 1.5),
+                    ?.copyWith(color: context.palette.textSecondary, height: 1.5),
               ),
             ],
           ),

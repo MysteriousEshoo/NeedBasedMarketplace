@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/seller_request_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// Opens the seller registration form as a modal bottom sheet.
 /// Returns `true` if a request was successfully submitted.
@@ -281,6 +282,7 @@ class _SellerRegistrationSheetState extends State<SellerRegistrationSheet> {
     int maxLines = 1,
     String? Function(String?)? validator,
   }) {
+    final c = context.palette;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
@@ -294,7 +296,7 @@ class _SellerRegistrationSheetState extends State<SellerRegistrationSheet> {
                 : null,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          labelStyle: TextStyle(color: c.textSecondary),
           prefixIcon: Icon(icon, color: AppColors.primaryLight, size: 20),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
@@ -315,6 +317,7 @@ class _SellerRegistrationSheetState extends State<SellerRegistrationSheet> {
 
   Widget _buildCategoryDropdown(
       Color textPrimary, Color textSecondary, Color border) {
+    final c = context.palette;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: DropdownButtonFormField<String>(
@@ -327,7 +330,7 @@ class _SellerRegistrationSheetState extends State<SellerRegistrationSheet> {
                 : Colors.white,
         decoration: InputDecoration(
           labelText: 'Business Category',
-          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          labelStyle: TextStyle(color: c.textSecondary),
           prefixIcon: const Icon(Icons.category_rounded,
               color: AppColors.primaryLight, size: 20),
           border: OutlineInputBorder(

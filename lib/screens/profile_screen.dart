@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'need_detail_screen.dart';
 import 'payment_methods_screen.dart';
 import 'help_screen.dart';
@@ -403,7 +404,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               height: 4,
                               margin: const EdgeInsets.only(bottom: 18),
                               decoration: BoxDecoration(
-                                color: AppColors.textTertiary.withOpacity(0.4),
+                                color: context.palette.textTertiary.withOpacity(0.4),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -986,8 +987,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: textPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 14)),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: AppColors.textTertiary, size: 14),
+                      trailing: Icon(Icons.arrow_forward_ios_rounded,
+                          color: context.palette.textTertiary, size: 14),
                       onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -1929,12 +1930,12 @@ class _FullEnterpriseSettingsScreenState
                       color: currentText,
                       fontWeight: FontWeight.w900,
                       fontSize: 13)),
-              subtitle: const Text(
+              subtitle: Text(
                   'Initiate direct call or compose official email channels',
                   style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-              trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                  color: AppColors.textTertiary, size: 14),
+                      TextStyle(color: context.palette.textTertiary, fontSize: 11)),
+              trailing: Icon(Icons.arrow_forward_ios_rounded,
+                  color: context.palette.textTertiary, size: 14),
               onTap: _handleContactSalesAction,
             ),
           ),
@@ -2041,8 +2042,8 @@ class _FullEnterpriseSettingsScreenState
                       fontSize: 13)),
               subtitle: Text('Manage your linked digital bank wallets',
                   style: TextStyle(color: currentSubText, fontSize: 11)),
-              trailing: const Icon(Icons.keyboard_arrow_right_rounded,
-                  color: AppColors.textTertiary, size: 18),
+              trailing: Icon(Icons.keyboard_arrow_right_rounded,
+                  color: context.palette.textTertiary, size: 18),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -2068,8 +2069,8 @@ class _FullEnterpriseSettingsScreenState
                       fontSize: 13)),
               subtitle: Text('Access documentation guides',
                   style: TextStyle(color: currentSubText, fontSize: 11)),
-              trailing: const Icon(Icons.keyboard_arrow_right_rounded,
-                  color: AppColors.textTertiary, size: 18),
+              trailing: Icon(Icons.keyboard_arrow_right_rounded,
+                  color: context.palette.textTertiary, size: 18),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const HelpScreen()),
@@ -2224,25 +2225,25 @@ class _FullEnterpriseSettingsScreenState
           backgroundColor: popBg,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: AppColors.border)),
+              side: BorderSide(color: context.palette.border)),
           title: Text('Update Username',
               style: TextStyle(
                   fontWeight: FontWeight.w900, color: popText, fontSize: 16)),
           content: TextField(
             controller: usernameInputController,
             style: TextStyle(color: popText),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'New Username',
-              labelStyle: TextStyle(color: AppColors.textSecondary),
+              labelStyle: TextStyle(color: context.palette.textSecondary),
               hintText: 'Only letters & numbers allowed',
-              hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              hintStyle: TextStyle(color: context.palette.textTertiary, fontSize: 12),
             ),
           ),
           actions: [
             TextButton(
                 onPressed: isProcessing ? null : () => Navigator.pop(context),
-                child: const Text('Cancel',
-                    style: TextStyle(color: AppColors.textSecondary))),
+                child: Text('Cancel',
+                    style: TextStyle(color: context.palette.textSecondary))),
             ElevatedButton(
               style:
                   ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
@@ -2314,7 +2315,7 @@ class _FullEnterpriseSettingsScreenState
           backgroundColor: popBg,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: AppColors.border)),
+              side: BorderSide(color: context.palette.border)),
           title: Text('Change Password',
               style: TextStyle(
                   fontWeight: FontWeight.w900, color: popText, fontSize: 16)),
@@ -2326,25 +2327,25 @@ class _FullEnterpriseSettingsScreenState
                   controller: currentPassController,
                   obscureText: true,
                   style: TextStyle(color: popText),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                       labelText: 'Current Password',
-                      labelStyle: TextStyle(color: AppColors.textSecondary)),
+                      labelStyle: TextStyle(color: context.palette.textSecondary)),
                 ),
                 TextField(
                   controller: newPassController,
                   obscureText: true,
                   style: TextStyle(color: popText),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                       labelText: 'Enter New Password',
-                      labelStyle: TextStyle(color: AppColors.textSecondary)),
+                      labelStyle: TextStyle(color: context.palette.textSecondary)),
                 ),
                 TextField(
                   controller: reEnterPassController,
                   obscureText: true,
                   style: TextStyle(color: popText),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                       labelText: 'Re-enter New Password',
-                      labelStyle: TextStyle(color: AppColors.textSecondary)),
+                      labelStyle: TextStyle(color: context.palette.textSecondary)),
                 ),
                 const SizedBox(height: 12),
                 Align(
@@ -2370,8 +2371,8 @@ class _FullEnterpriseSettingsScreenState
           actions: [
             TextButton(
                 onPressed: isProcessing ? null : () => Navigator.pop(context),
-                child: const Text('Cancel',
-                    style: TextStyle(color: AppColors.textSecondary))),
+                child: Text('Cancel',
+                    style: TextStyle(color: context.palette.textSecondary))),
             ElevatedButton(
               style:
                   ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
@@ -2472,8 +2473,8 @@ class _FullEnterpriseSettingsScreenState
                 Text(
                     'A link has been sent to $maskedEmail. Check your inbox to safely update configuration mappings.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12)),
+                    style: TextStyle(
+                        color: context.palette.textSecondary, fontSize: 12)),
               ],
             ),
           );
@@ -2507,8 +2508,8 @@ class _FullEnterpriseSettingsScreenState
                   fontWeight: FontWeight.bold,
                   fontSize: 15)),
           content: Text(desc,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 13)),
+              style: TextStyle(
+                  color: context.palette.textSecondary, fontSize: 13)),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -2553,8 +2554,8 @@ class _FullEnterpriseSettingsScreenState
                         fontWeight: FontWeight.bold)),
                 subtitle: Text(
                     'Open phone dialer for ${_salesContactConfig.phoneDisplay}',
-                    style: const TextStyle(
-                        color: AppColors.textTertiary, fontSize: 11)),
+                    style: TextStyle(
+                        color: context.palette.textTertiary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
                   _launchSalesPhoneChannel();
@@ -2570,8 +2571,8 @@ class _FullEnterpriseSettingsScreenState
                             isDarkMode ? AppColors.textPrimary : Colors.black87,
                         fontWeight: FontWeight.bold)),
                 subtitle: Text('Compose email to ${_salesContactConfig.email}',
-                    style: const TextStyle(
-                        color: AppColors.textTertiary, fontSize: 11)),
+                    style: TextStyle(
+                        color: context.palette.textTertiary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
                   _launchSalesMailbox();
@@ -2639,8 +2640,8 @@ class _FullEnterpriseSettingsScreenState
                 color: text, fontWeight: FontWeight.bold, fontSize: 13)),
         subtitle:
             Text(subtitle, style: TextStyle(color: subText, fontSize: 11)),
-        trailing: const Icon(Icons.keyboard_arrow_right_rounded,
-            color: AppColors.textTertiary, size: 18),
+        trailing: Icon(Icons.keyboard_arrow_right_rounded,
+            color: context.palette.textTertiary, size: 18),
         onTap: actionHook,
       ),
     );
@@ -2693,7 +2694,7 @@ class _FullEnterpriseSettingsScreenState
                 color: color, fontWeight: FontWeight.w900, fontSize: 13)),
         subtitle: Text(sub,
             style:
-                const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                TextStyle(color: context.palette.textTertiary, fontSize: 11)),
         onTap: onTap ?? () => _showComingSoon(title),
       ),
     );

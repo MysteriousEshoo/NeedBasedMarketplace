@@ -5,6 +5,7 @@ import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class VoiceRecorder extends StatefulWidget {
   final void Function(File audioFile, int durationSeconds) onRecordComplete;
@@ -165,14 +166,15 @@ class _VoiceRecorderState extends State<VoiceRecorder> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     final accentColor = widget.accentColor ?? AppColors.primary;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -198,17 +200,17 @@ class _VoiceRecorderState extends State<VoiceRecorder> {
                   const SizedBox(width: 10),
                   Text(
                     _isRecording ? 'Recording...' : 'Voice Message',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                      color: c.textPrimary,
                     ),
                   ),
                 ],
               ),
               Text(
                 _formatDuration(_recordingDuration),
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: c.textSecondary,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),

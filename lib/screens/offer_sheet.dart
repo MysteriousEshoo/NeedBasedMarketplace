@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart' as legacy;
 import '../models/offer_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../services/notification_service.dart';
 import '../services/chat_service.dart';
 import 'chat_screen.dart';
@@ -219,6 +220,7 @@ class _OfferSheetState extends State<OfferSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.palette;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppColors.surface : Colors.white;
     // Keyboard height — so the sheet lifts above the keyboard instead of
@@ -251,25 +253,25 @@ class _OfferSheetState extends State<OfferSheet> {
                 height: 5,
                 width: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: c.border,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Submit an Offer',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
+                color: c.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'For: ${widget.need.title}',
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: c.textSecondary,
                 fontSize: 14,
               ),
             ),
@@ -281,10 +283,10 @@ class _OfferSheetState extends State<OfferSheet> {
                   TextFormField(
                     controller: _priceController,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: c.textPrimary,
                     ),
                     decoration: InputDecoration(
                       labelText: 'Your Price (PKR)',
@@ -306,7 +308,7 @@ class _OfferSheetState extends State<OfferSheet> {
                   DropdownButtonFormField<String>(
                     value: _selectedDelivery,
                     dropdownColor: bgColor,
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    style: TextStyle(color: c.textPrimary),
                     decoration: const InputDecoration(
                       labelText: 'Delivery Time',
                       prefixIcon: Icon(Icons.schedule_rounded),
@@ -340,7 +342,7 @@ class _OfferSheetState extends State<OfferSheet> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _customDeliveryController,
-                      style: const TextStyle(color: AppColors.textPrimary),
+                      style: TextStyle(color: c.textPrimary),
                       decoration: const InputDecoration(
                         labelText: 'Enter Custom Delivery Time',
                         hintText: 'e.g. 5 business days',
@@ -352,8 +354,8 @@ class _OfferSheetState extends State<OfferSheet> {
                   TextFormField(
                     controller: _messageController,
                     maxLines: 3,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: c.textPrimary,
                     ),
                     decoration: InputDecoration(
                       labelText: 'Message (Optional)',

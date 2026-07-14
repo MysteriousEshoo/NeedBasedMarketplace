@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// Custom-Engineered Interactive 3D Card.
 ///
@@ -109,8 +110,9 @@ class _CardSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     // React to the active theme so the card flips between dark and light
     // instantly when the user toggles the theme.
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color surfaceColor = isDark ? AppColors.surface : Colors.white;
+    final c = context.palette;
+    final bool isDark = c.isDark;
+    final Color surfaceColor = c.surface;
     final Color borderColor = isDark
         ? Colors.white.withValues(alpha: 0.06)
         : const Color(0xFFE2E8F0);

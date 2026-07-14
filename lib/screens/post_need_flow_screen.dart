@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:uuid/uuid.dart';
 import '../models/need_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/primary_loading_button.dart';
 import 'premium_screen.dart';
 
@@ -215,101 +216,104 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                height: 72,
-                width: 72,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle_rounded,
-                  color: AppColors.accent,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Your Need Is Posted!',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Get More Attention From Sellers With Premium',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _navigateToPremium();
-                  },
-                  child: const Text(
-                    'Upgrade to Premium',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    side: const BorderSide(color: AppColors.border),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      builder: (context) {
+        final c = context.palette;
+        return Dialog(
+          backgroundColor: c.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
           ),
-        ),
-      ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 72,
+                  width: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.accent,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Your Need Is Posted!',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Get More Attention From Sellers With Premium',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _navigateToPremium();
+                    },
+                    child: const Text(
+                      'Upgrade to Premium',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      side: BorderSide(color: c.border),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.pop(context);
+                    },
+                    child: Text(
+                      'Skip',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -378,6 +382,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
   }
 
   Widget _buildProgressIndicator() {
+    final c = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Row(
@@ -390,7 +395,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
                 duration: const Duration(milliseconds: 300),
                 height: 6,
                 decoration: BoxDecoration(
-                  color: isActive ? AppColors.primary : AppColors.border,
+                  color: isActive ? AppColors.primary : c.border,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -479,6 +484,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
   }
 
   Widget _buildStepTwo() {
+    final c = context.palette;
     return _StepScaffold(
       step: 'Step 2 of 3',
       title: 'Add the details',
@@ -487,9 +493,9 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         const _FieldLabel('Description'),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: c.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border, width: 1.4),
+            border: Border.all(color: c.border, width: 1.4),
           ),
           child: Column(
             children: [
@@ -575,6 +581,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
   }
 
   Widget _buildConditionCard(String label, IconData icon) {
+    final c = context.palette;
     final isSelected = _condition == label;
     return GestureDetector(
       onTap: () => setState(() => _condition = label),
@@ -584,10 +591,10 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.primary.withValues(alpha: 0.12)
-              : AppColors.surface,
+              : c.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
+            color: isSelected ? AppColors.primary : c.border,
             width: isSelected ? 2 : 1.4,
           ),
         ),
@@ -595,13 +602,13 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+              color: isSelected ? AppColors.primary : c.textSecondary,
             ),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                color: isSelected ? AppColors.primary : c.textSecondary,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
@@ -612,6 +619,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
   }
 
   Widget _buildPaymentCard(String label, IconData icon) {
+    final c = context.palette;
     final isSelected = _paymentMethod == label;
     return GestureDetector(
       onTap: () => setState(() => _paymentMethod = label),
@@ -621,10 +629,10 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.primary.withValues(alpha: 0.12)
-              : AppColors.surface,
+              : c.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
+            color: isSelected ? AppColors.primary : c.border,
             width: isSelected ? 2 : 1.4,
           ),
         ),
@@ -632,13 +640,13 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+              color: isSelected ? AppColors.primary : c.textSecondary,
             ),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                color: isSelected ? AppColors.primary : c.textSecondary,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
@@ -682,7 +690,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
             .map(
               (i) => Padding(
                 padding: const EdgeInsets.only(right: 16),
-                child: Icon(i, size: 20, color: AppColors.textSecondary),
+                child: Icon(i, size: 20, color: context.palette.textSecondary),
               ),
             )
             .toList(),
@@ -694,9 +702,9 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     final isLast = _currentStep == _totalSteps - 1;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.divider)),
+      decoration: BoxDecoration(
+        color: context.palette.surface,
+        border: Border(top: BorderSide(color: context.palette.divider)),
       ),
       child: SafeArea(
         top: false,
@@ -763,7 +771,7 @@ class _StepScaffold extends StatelessWidget {
           Text(
             subtitle,
             style: textTheme.bodyLarge?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.palette.textSecondary,
               height: 1.5,
             ),
           ),
@@ -785,10 +793,10 @@ class _FieldLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10, left: 2),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 14,
-          color: AppColors.textPrimary,
+          color: context.palette.textPrimary,
         ),
       ),
     );
@@ -814,10 +822,10 @@ class _UrgencyCard extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? urgency.softColor : AppColors.surface,
+          color: selected ? urgency.softColor : context.palette.surface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? urgency.color : AppColors.border,
+            color: selected ? urgency.color : context.palette.border,
             width: selected ? 1.8 : 1.4,
           ),
         ),
@@ -850,8 +858,8 @@ class _UrgencyCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     _subtitleFor(urgency),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: context.palette.textSecondary,
                       fontSize: 13,
                     ),
                   ),
