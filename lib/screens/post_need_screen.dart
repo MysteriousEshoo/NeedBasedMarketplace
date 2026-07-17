@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/need_model.dart';
+import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/primary_loading_button.dart';
+import '../widgets/upload_progress_dialog.dart';
 import 'premium_screen.dart';
+
+enum _PostSuccessAction { ok, premium }
 
 class PostNeedScreen extends StatefulWidget {
   const PostNeedScreen({super.key});
@@ -143,6 +150,8 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
   }
 
   Future<void> _publish() async {
+    if (_isPublishing) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _isPublishing = true);
 
     try {
@@ -196,124 +205,258 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
 
       final DatabaseReference dbRef =
           FirebaseDatabase.instance.ref().child('needs');
-      final DatabaseReference newNeedRef = dbRef.push();
-      await newNeedRef.set(needData);
-      _lastPostedNeedRef = newNeedRef;
+      final DatabaseReference newNeedRef = _lastPostedNeedRef ??= dbRef.push();
+      needData['id'] = newNeedRef.key;
+      // 📶 0→100% loading bar tied to the actual network write — the bar
+      // completes only when the server confirms, so speed depends on network.
+      final publishTask =
+          newNeedRef.set(needData).timeout(const Duration(seconds: 25));
+      await UploadProgressDialog.run(context, task: publishTask);
+      await HistoryService.log(
+        type: HistoryService.typeNeedPosted,
+        title: _titleController.text.trim(),
+        subtitle: _selectedCategory ?? 'General',
+        refId: newNeedRef.key,
+      );
 
       if (!mounted) return;
       setState(() => _isPublishing = false);
 
-      _showSuccessPopup();
+      await _showSuccessPopup();
     } catch (e) {
       if (!mounted) return;
       setState(() => _isPublishing = false);
-      _showError('Error publishing: ${e.toString()}');
+      if (e is TimeoutException && _lastPostedNeedRef != null) {
+        unawaited(
+          _lastPostedNeedRef!.remove().then<void>(
+                (_) {},
+                onError: (_) {},
+              ),
+        );
+      }
+      final shouldRetry = await _showFailurePopup(e);
+      if (shouldRetry && mounted) {
+        await _publish();
+      }
     }
   }
 
-  void _showSuccessPopup() {
-    showDialog(
+  Future<void> _showSuccessPopup() async {
+    final action = await showDialog<_PostSuccessAction>(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
-        final c = context.palette;
+      builder: (dialogContext) {
+        final c = dialogContext.palette;
         return Dialog(
           backgroundColor: c.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
           ),
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 72,
-                  width: 72,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: AppColors.accent,
-                    size: 40,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Your Need Is Posted!',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Get More Attention From Sellers With Premium',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 72,
+                    width: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
                     ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _navigateToPremium();
-                    },
-                    child: const Text(
-                      'Upgrade to Premium',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: AppColors.accent,
+                      size: 40,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Your Need Is Posted!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'It is live now and will update for buyers and sellers in real time.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.workspace_premium_rounded),
+                      label: const Text('Upgrade to Premium'),
+                      onPressed: () => Navigator.of(dialogContext).pop(
+                        _PostSuccessAction.premium,
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      side: BorderSide(color: c.border),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
-                    },
-                    child: Text(
-                      'Skip',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text(
+                        'OK',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(dialogContext).pop(
+                        _PostSuccessAction.ok,
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
     );
+
+    if (!mounted) return;
+    if (action == _PostSuccessAction.premium) {
+      await _navigateToPremium();
+    } else if (action == _PostSuccessAction.ok) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  Future<bool> _showFailurePopup(Object error) async {
+    final shouldRetry = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final c = dialogContext.palette;
+        return Dialog(
+          backgroundColor: c.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 68,
+                    width: 68,
+                    decoration: BoxDecoration(
+                      color: AppColors.urgentHigh.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.cloud_off_rounded,
+                      color: AppColors.urgentHigh,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Need Was Not Posted',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _friendlyPublishError(error),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 14,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('Keep Editing'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text(
+                        'Try Again',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    return shouldRetry ?? false;
+  }
+
+  String _friendlyPublishError(Object error) {
+    if (error is FirebaseException) {
+      switch (error.code.toLowerCase()) {
+        case 'permission-denied':
+          return 'Firebase did not allow this post. Please sign in again or check your database rules.';
+        case 'network-request-failed':
+        case 'network-error':
+        case 'disconnected':
+        case 'unavailable':
+          return 'Please check your internet connection, then try again. Your entered details are still here.';
+      }
+    }
+
+    final message = error.toString().toLowerCase();
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('host lookup') ||
+        message.contains('disconnected') ||
+        message.contains('timeout')) {
+      return 'Please check your internet connection, then try again. Your entered details are still here.';
+    }
+    return 'Firebase could not save this need. Please try again; your entered details have not been cleared.';
   }
 
   Future<void> _navigateToPremium() async {
@@ -355,7 +498,14 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _back,
         ),
-        title: const Text('Post a Need'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BrandLogo(size: 30, borderRadius: 7),
+            SizedBox(width: 10),
+            Flexible(child: Text('Post a Need')),
+          ],
+        ),
       ),
       body: SafeArea(
         child: Column(

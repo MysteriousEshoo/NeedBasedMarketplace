@@ -38,8 +38,14 @@ dependencies:
   permission_handler: ^12.0.3    # Permissions
   agora_rtc_engine: ^6.5.4       # Voice calling
 
+  # ✅ NEW: WhatsApp-style heads-up notifications
+  flutter_local_notifications: ^19.0.0
+
 dev_dependencies:
   flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/

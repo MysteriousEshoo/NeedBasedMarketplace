@@ -1347,8 +1347,6 @@ class _FullEnterpriseSettingsScreen extends StatefulWidget {
 class _FullEnterpriseSettingsScreenState
     extends State<_FullEnterpriseSettingsScreen> {
   bool _pushNotifications = true;
-  bool _fingerprintEnabled = false;
-  bool _faceIdEnabled = false;
   bool _notificationsEnabled = true;
   _SalesContactConfig _salesContactConfig = _SalesContactConfig.fallback;
   StreamSubscription<DatabaseEvent>? _salesContactSubscription;
@@ -2068,53 +2066,6 @@ class _FullEnterpriseSettingsScreenState
               onChanged: _toggleNotifications,
             ),
           ),
-          _buildSectionHeader('🔒 SECURITY & BIOMETRICS'),
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Fingerprint Unlock',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text(
-                  'Unlock app using your device physical fingerprint scanner',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _fingerprintEnabled,
-              onChanged: (v) {
-                setState(() => _fingerprintEnabled = v);
-                _triggerBiometricSetupConsole('fingerprint');
-              },
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-                color: currentSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: currentBorder)),
-            child: SwitchListTile(
-              activeColor: AppColors.primaryLight,
-              title: Text('Face ID / Recognition',
-                  style: TextStyle(
-                      color: currentText,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13)),
-              subtitle: Text(
-                  'Enable quick device look vectors for seamless authentication routing',
-                  style: TextStyle(color: currentSubText, fontSize: 11)),
-              value: _faceIdEnabled,
-              onChanged: (v) {
-                setState(() => _faceIdEnabled = v);
-                _triggerBiometricSetupConsole('faceid');
-              },
-            ),
-          ),
           _buildSectionHeader('🌍 APP PREFERENCES'),
           _buildSwitchRow(
             'Dark Mode Theme',
@@ -2231,83 +2182,6 @@ class _FullEnterpriseSettingsScreenState
   // --------------------------------------------------------------------------
   // Helper Methods
   // --------------------------------------------------------------------------
-
-  void _triggerBiometricSetupConsole(String type) async {
-    bool isFingerprint = type == 'fingerprint';
-    if ((isFingerprint && !_fingerprintEnabled) ||
-        (!isFingerprint && !_faceIdEnabled)) {
-      _showCoreFeedback(
-          '${isFingerprint ? "Fingerprint" : "Face ID"} unlock disabled.');
-      return;
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
-        final themeProvider =
-            Provider.of<ThemeProvider>(context, listen: false);
-        final bool isDarkMode = themeProvider.isDarkMode;
-
-        Future.delayed(const Duration(milliseconds: 2500), () {
-          if (!mounted) return;
-          Navigator.pop(context);
-          _showCoreFeedback(
-              '🎉 ${isFingerprint ? "Fingerprint" : "Face ID"} activation setup completed successfully!');
-        });
-
-        final Color popBg = isDarkMode ? AppColors.surface : Colors.white;
-        final Color popText =
-            isDarkMode ? AppColors.textPrimary : Colors.black87;
-        final Color popSubText =
-            isDarkMode ? AppColors.textSecondary : Colors.black54;
-
-        return AlertDialog(
-          backgroundColor: popBg,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
-              side: BorderSide(color: AppColors.primary.withOpacity(0.5))),
-          content: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                    isFingerprint
-                        ? Icons.fingerprint_rounded
-                        : Icons.face_retouching_natural_rounded,
-                    size: 72,
-                    color: AppColors.primaryLight),
-                const SizedBox(height: 20),
-                Text(
-                    isFingerprint
-                        ? 'SCANNING FINGERPRINT...'
-                        : 'RECOGNIZING FACE...',
-                    style: TextStyle(
-                        color: popText,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        letterSpacing: 0.5)),
-                const SizedBox(height: 10),
-                Text(
-                    isFingerprint
-                        ? 'Please place your registered finger firmly against the device biometric sensor layout matrix.'
-                        : 'Please position your device directly in front of your face and look straight into the camera lens node.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: popSubText, fontSize: 12)),
-                const SizedBox(height: 24),
-                const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: AppColors.primaryLight)),
-              ],
-            ),
-          ),
-        );
-      }),
-    );
-  }
 
   void _executeLiveUsernameChangeProcedure() async {
     final user = FirebaseAuth.instance.currentUser;

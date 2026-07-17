@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
 import '../services/notification_service.dart';
+import '../widgets/brand_logo.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
 import 'post_need_screen.dart';
@@ -119,10 +120,16 @@ class _MainShellState extends State<MainShell> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton:
           _isSellerModeActive ? null : _GlowingFab(onPressed: _openPostNeed),
+      // 🎨 Clean white-bg app bar (per reference design): logo + brand name
+      // on the left, flat surface, zero shadows on icons/text.
       appBar: AppBar(
         backgroundColor: surface,
         elevation: 0,
-        title: const Text('NeedHub'),
+        scrolledUnderElevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 16,
+        title: const AppBarBrand(),
         actions: [
           if (_currentUserId != null)
             StreamBuilder<int>(
@@ -174,15 +181,21 @@ class _MainShellState extends State<MainShell> {
         ],
       ),
       body: StreamBuilder(
-        stream: FirebaseDatabase.instance.ref().child('needs').onValue,
+        stream: FirebaseDatabase.instance
+            .ref()
+            .child('needs')
+            .orderByChild('timestamp')
+            .limitToLast(100)
+            .onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
           List<legacy.Need> liveNeeds = [];
 
-          if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-            final Map<dynamic, dynamic> allMap =
-                snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+          final rawNeeds = snapshot.data?.snapshot.value;
+          if (rawNeeds is Map) {
+            final Map<dynamic, dynamic> allMap = rawNeeds;
             allMap.forEach((key, value) {
-              final data = Map<String, dynamic>.from(value as Map);
+              if (value is! Map) return;
+              final data = Map<String, dynamic>.from(value);
               legacy.Urgency dynamicUrgency = legacy.Urgency.medium;
               if (data['urgency'] == 'high') {
                 dynamicUrgency = legacy.Urgency.high;
@@ -195,11 +208,11 @@ class _MainShellState extends State<MainShell> {
                 title: data['title'] ?? 'Untitled',
                 description: data['description'] ?? '',
                 category: data['category'] ?? 'General',
-                budget: data['budget'] ?? 0,
+                budget: (data['budget'] as num?)?.toInt() ?? 0,
                 timeElapsed: dynamicTimeText,
                 urgency: dynamicUrgency,
                 authorName: data['authorName'] ?? 'Anonymous',
-                offers: data['offers'] ?? 0,
+                offers: (data['offers'] as num?)?.toInt() ?? 0,
                 companyName: data['company'],
                 condition: data['condition'] == null
                     ? null
@@ -459,16 +472,11 @@ class _BottomNav extends StatelessWidget {
     final Color navBg = isDark ? AppColors.surface : Colors.white;
     final Color navBorder =
         isDark ? AppColors.divider : const Color(0xFFE2E8F0);
-    final Color navShadow = isDark ? AppColors.shadow : Colors.black12;
 
     return Container(
       decoration: BoxDecoration(
         color: navBg,
         border: Border(top: BorderSide(color: navBorder)),
-        boxShadow: [
-          BoxShadow(
-              color: navShadow, blurRadius: 20, offset: const Offset(0, -4)),
-        ],
       ),
       child: SafeArea(
         child: SizedBox(
@@ -529,21 +537,9 @@ class _NavItem extends StatelessWidget {
             AnimatedContainer(
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutCubic,
-              // Selected item lifts up with a glowing halo for depth.
+              // Selected item lifts up slightly — flat design, no glow/shadow.
               transform: Matrix4.translationValues(0, selected ? -4 : 0, 0),
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.45),
-                          blurRadius: 16,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : const [],
-              ),
               child: AnimatedScale(
                 scale: selected ? 1.15 : 1,
                 duration: const Duration(milliseconds: 200),
@@ -599,8 +595,8 @@ class _PlaceholderTab extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: textTheme.bodyLarge
-                    ?.copyWith(color: context.palette.textSecondary, height: 1.5),
+                style: textTheme.bodyLarge?.copyWith(
+                    color: context.palette.textSecondary, height: 1.5),
               ),
             ],
           ),
@@ -616,67 +612,15 @@ class _GlowingFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GlowingFabContent(onPressed: onPressed);
-  }
-}
-
-class _GlowingFabContent extends StatefulWidget {
-  const _GlowingFabContent({required this.onPressed});
-  final VoidCallback onPressed;
-
-  @override
-  State<_GlowingFabContent> createState() => _GlowingFabState();
-}
-
-class _GlowingFabState extends State<_GlowingFabContent>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final glow = 14 + _controller.value * 16;
-        return Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.45),
-                blurRadius: glow,
-                spreadRadius: _controller.value * 2,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: child,
-        );
-      },
-      child: FloatingActionButton(
-        onPressed: widget.onPressed,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        highlightElevation: 0,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add_rounded, size: 28),
-      ),
+    // Flat design — glow/shadow removed per the reference design.
+    return FloatingActionButton(
+      onPressed: onPressed,
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      highlightElevation: 0,
+      shape: const CircleBorder(),
+      child: const Icon(Icons.add_rounded, size: 28),
     );
   }
 }

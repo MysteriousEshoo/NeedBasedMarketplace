@@ -1,4 +1,4 @@
-package com.example.need_marketplace
+package com.thevibes.needbasemarketplace
 
 import io.flutter.embedding.android.FlutterActivity
 

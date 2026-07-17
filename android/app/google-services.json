@@ -1,45 +1,65 @@
 {
   "project_info": {
-    "project_number": "976134004608",
-    "firebase_url": "https://needbasedmarketplace-default-rtdb.asia-southeast1.firebasedatabase.app",
-    "project_id": "needbasedmarketplace",
-    "storage_bucket": "needbasedmarketplace.firebasestorage.app"
+    "project_number": "636560866742",
+    "firebase_url": "https://studyplanner1367-default-rtdb.firebaseio.com",
+    "project_id": "studyplanner1367",
+    "storage_bucket": "studyplanner1367.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:976134004608:android:1d48ec9ea544c31db16b65",
+        "mobilesdk_app_id": "1:636560866742:android:be71fe62bef4790aa0d517",
         "android_client_info": {
-          "package_name": "com.esha.marketplace"
+          "package_name": "com.emiratesit.ntirc"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "976134004608-qf5ofj7rvs9s4cofet4kmv2s7ga7gsho.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.esha.marketplace",
-            "certificate_hash": "e10b64f5aed5f97540929fdd9e67539027d5e620"
-          }
-        },
-        {
-          "client_id": "976134004608-hg1l8vbi7r5bc6d48qqa42gne6uvnv1p.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBnRoxBCDxNySdLvRR_TasGhpFm7QGDrGM"
+          "current_key": "AIzaSyAJlk1DnGcNrNtL_OmTyJPx7nMPxDlkEV0"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "976134004608-hg1l8vbi7r5bc6d48qqa42gne6uvnv1p.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:636560866742:android:bada0ad79d92a9ffa0d517",
+        "android_client_info": {
+          "package_name": "com.example.studyplanner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJlk1DnGcNrNtL_OmTyJPx7nMPxDlkEV0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:636560866742:android:34f6729a2e31c9bea0d517",
+        "android_client_info": {
+          "package_name": "com.thevibes.needbasemarketplace"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJlk1DnGcNrNtL_OmTyJPx7nMPxDlkEV0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
         }
       }
     }

@@ -279,13 +279,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: surfaceColor,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: borderColor),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: TextField(
                   controller: _searchController,

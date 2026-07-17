@@ -17,6 +17,7 @@
         "firebase_database",
         "firebase_storage",
         "flutter",
+        "flutter_local_notifications",
         "google_fonts",
         "google_sign_in",
         "image_picker",
@@ -36,6 +37,18 @@
       "version": "4.0.0",
       "dependencies": [
         "lints"
+      ]
+    },
+    {
+      "name": "flutter_local_notifications",
+      "version": "19.5.0",
+      "dependencies": [
+        "clock",
+        "flutter",
+        "flutter_local_notifications_linux",
+        "flutter_local_notifications_platform_interface",
+        "flutter_local_notifications_windows",
+        "timezone"
       ]
     },
     {
@@ -270,6 +283,50 @@
     {
       "name": "lints",
       "version": "4.0.0",
+      "dependencies": []
+    },
+    {
+      "name": "timezone",
+      "version": "0.10.1",
+      "dependencies": [
+        "http",
+        "path"
+      ]
+    },
+    {
+      "name": "flutter_local_notifications_platform_interface",
+      "version": "9.1.0",
+      "dependencies": [
+        "plugin_platform_interface"
+      ]
+    },
+    {
+      "name": "flutter_local_notifications_windows",
+      "version": "1.0.3",
+      "dependencies": [
+        "ffi",
+        "flutter",
+        "flutter_local_notifications_platform_interface",
+        "meta",
+        "timezone",
+        "xml"
+      ]
+    },
+    {
+      "name": "flutter_local_notifications_linux",
+      "version": "6.0.0",
+      "dependencies": [
+        "dbus",
+        "ffi",
+        "flutter",
+        "flutter_local_notifications_platform_interface",
+        "path",
+        "xdg_directories"
+      ]
+    },
+    {
+      "name": "clock",
+      "version": "1.1.2",
       "dependencies": []
     },
     {
@@ -943,6 +1000,33 @@
       "dependencies": []
     },
     {
+      "name": "xml",
+      "version": "6.6.1",
+      "dependencies": [
+        "collection",
+        "meta",
+        "petitparser"
+      ]
+    },
+    {
+      "name": "xdg_directories",
+      "version": "1.1.0",
+      "dependencies": [
+        "meta",
+        "path"
+      ]
+    },
+    {
+      "name": "dbus",
+      "version": "0.7.14",
+      "dependencies": [
+        "args",
+        "ffi",
+        "meta",
+        "xml"
+      ]
+    },
+    {
       "name": "path_provider_windows",
       "version": "2.3.0",
       "dependencies": [
@@ -1089,17 +1173,22 @@
       ]
     },
     {
-      "name": "platform",
-      "version": "3.1.6",
+      "name": "petitparser",
+      "version": "7.0.2",
+      "dependencies": [
+        "collection",
+        "meta"
+      ]
+    },
+    {
+      "name": "args",
+      "version": "2.7.0",
       "dependencies": []
     },
     {
-      "name": "xdg_directories",
-      "version": "1.1.0",
-      "dependencies": [
-        "meta",
-        "path"
-      ]
+      "name": "platform",
+      "version": "3.1.6",
+      "dependencies": []
     },
     {
       "name": "objective_c",
@@ -1177,11 +1266,6 @@
       ]
     },
     {
-      "name": "clock",
-      "version": "1.1.2",
-      "dependencies": []
-    },
-    {
       "name": "fake_async",
       "version": "1.3.3",
       "dependencies": [
@@ -1254,11 +1338,6 @@
       "dependencies": [
         "path"
       ]
-    },
-    {
-      "name": "args",
-      "version": "2.7.0",
-      "dependencies": []
     },
     {
       "name": "term_glyph",
