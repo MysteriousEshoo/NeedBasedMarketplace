@@ -20,9 +20,22 @@ import 'services/realtime_alert_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Firebase init is guarded so a config mismatch can never leave the app on
+  // a black screen before the first frame. On Android the native layer may
+  // already have auto-initialized the [DEFAULT] app from google-services.json;
+  // if it did so with different options, initializeApp throws duplicate-app —
+  // in that case the already-initialized app is used and we continue.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') {
+      debugPrint('Firebase init failed: $e');
+    }
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
+  }
 
   // 🔔 WhatsApp-style alerts: heads-up popups for every incoming in-app
   // notification + seller category-matched need alerts. Auth-bound: starts

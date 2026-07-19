@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   String? _currentUserId;
 
@@ -63,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -271,144 +273,185 @@ class _HomeScreenState extends State<HomeScreen> {
             // Trust banner — asks the user to verify their email.
             if (!_emailVerified) _buildVerifyBanner(),
 
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderColor),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: TextStyle(color: textPrimary, fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: 'Search by keyword, category, or title...',
-                    hintStyle: TextStyle(
-                      color: textTertiary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: AppColors.primaryLight,
-                      size: 22,
-                    ),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.close_rounded,
-                              color: textTertiary,
-                              size: 18,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 16,
-                    ),
-                  ),
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                ),
-              ),
-            ),
-
-            // Category Chips
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 44,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _localCategories.length,
-                itemBuilder: (context, index) {
-                  final cat = _localCategories[index];
-                  final isSelected = _selectedCategory == cat;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      label: Text(cat),
-                      selected: isSelected,
-                      selectedColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : textSecondary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      backgroundColor: surfaceColor,
-                      side: BorderSide(
-                        color: isSelected ? AppColors.primary : borderColor,
-                      ),
-                      onSelected: (bool selected) {
-                        setState(
-                            () => _selectedCategory = selected ? cat : 'All');
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Need List
+            // Everything below the greeting scrolls together (search, filter
+            // chips and the needs feed) with an always-visible scrollbar so
+            // the user can see how far they've scrolled and how much remains.
             Expanded(
-              child: filteredNeeds.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            widget.isSellerMode
-                                ? Icons.search_off_rounded
-                                : Icons.hourglass_empty_rounded,
-                            size: 48,
-                            color: textTertiary,
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: true,
+                trackVisibility: true,
+                interactive: true,
+                thickness: 5,
+                radius: const Radius.circular(8),
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  slivers: [
+                    // Search Bar
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 8),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: surfaceColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: borderColor),
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            widget.isSellerMode
-                                ? 'No needs available'
-                                : 'You haven\'t posted any needs yet',
-                            style: TextStyle(
-                              color: textSecondary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                          child: TextField(
+                            controller: _searchController,
+                            style: TextStyle(color: textPrimary, fontSize: 15),
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Search by keyword, category, or title...',
+                              hintStyle: TextStyle(
+                                color: textTertiary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search_rounded,
+                                color: AppColors.primaryLight,
+                                size: 22,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: Icon(
+                                        Icons.close_rounded,
+                                        color: textTertiary,
+                                        size: 18,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _searchController.clear();
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                                horizontal: 16,
+                              ),
                             ),
+                            onChanged: (val) =>
+                                setState(() => _searchQuery = val),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.isSellerMode
-                                ? 'Check back later for new requests'
-                                : 'Tap + to post your first need',
-                            style: TextStyle(
-                              color: textTertiary,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: filteredNeeds.length,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemBuilder: (context, index) {
-                        final need = filteredNeeds[index];
-                        return EntranceMotion(
-                          delay: Duration(milliseconds: (index * 70).clamp(0, 500)),
-                          child: _buildModernNeedCard(need),
-                        );
-                      },
                     ),
+
+                    // Category Chips
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: SizedBox(
+                          height: 44,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _localCategories.length,
+                            itemBuilder: (context, index) {
+                              final cat = _localCategories[index];
+                              final isSelected = _selectedCategory == cat;
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: ChoiceChip(
+                                  label: Text(cat),
+                                  selected: isSelected,
+                                  selectedColor: AppColors.primary,
+                                  labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : textSecondary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  backgroundColor: surfaceColor,
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : borderColor,
+                                  ),
+                                  onSelected: (bool selected) {
+                                    setState(() => _selectedCategory =
+                                        selected ? cat : 'All');
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                    // Need List
+                    if (filteredNeeds.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                widget.isSellerMode
+                                    ? Icons.search_off_rounded
+                                    : Icons.hourglass_empty_rounded,
+                                size: 48,
+                                color: textTertiary,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                widget.isSellerMode
+                                    ? 'No needs available'
+                                    : 'You haven\'t posted any needs yet',
+                                style: TextStyle(
+                                  color: textSecondary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.isSellerMode
+                                    ? 'Check back later for new requests'
+                                    : 'Tap + to post your first need',
+                                style: TextStyle(
+                                  color: textTertiary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList.builder(
+                          itemCount: filteredNeeds.length,
+                          itemBuilder: (context, index) {
+                            final need = filteredNeeds[index];
+                            return EntranceMotion(
+                              delay: Duration(
+                                  milliseconds: (index * 70).clamp(0, 500)),
+                              child: _buildModernNeedCard(need),
+                            );
+                          },
+                        ),
+                      ),
+
+                    // Breathing room so the last card clears the bottom nav.
+                    const SliverToBoxAdapter(child: SizedBox(height: 90)),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
