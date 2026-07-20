@@ -22,7 +22,8 @@ class SellerDashboardFeed extends StatefulWidget {
 class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
   final List<Need> _needs = [];
   final ChatService _chatService = ChatService();
-  final Map<String, Stream<OfferModel?>> _offerStreams = {};
+  final ScrollController _scrollController =
+      ScrollController(keepScrollOffset: false);
   bool _isLoading = true;
   String? _error;
   StreamSubscription? _subscription;
@@ -36,6 +37,7 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -174,12 +176,9 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
   }
 
   Stream<OfferModel?> _offerStreamFor(Need need) {
-    return _offerStreams.putIfAbsent(
-      need.id,
-      () => _chatService.watchOfferForChat(
-        needId: need.id,
-        otherUserId: need.userId ?? need.authorId ?? '',
-      ),
+    return _chatService.watchOfferForChat(
+      needId: need.id,
+      otherUserId: need.userId ?? need.authorId ?? '',
     );
   }
 
@@ -357,11 +356,16 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                               ),
                             )
                           : ListView.builder(
+                              controller: _scrollController,
+                              primary: false,
                               itemCount: _needs.length,
                               padding: const EdgeInsets.all(16),
                               itemBuilder: (context, index) {
                                 final need = _needs[index];
-                                return _buildNeedCard(need, c);
+                                return KeyedSubtree(
+                                  key: ValueKey(need.id),
+                                  child: _buildNeedCard(need, c),
+                                );
                               },
                             ),
             ),
