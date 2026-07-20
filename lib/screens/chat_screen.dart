@@ -195,6 +195,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ? 'Your offer for "${widget.needTitle}" was accepted. You can continue the chat.'
             : 'Your offer for "${widget.needTitle}" was rejected by the buyer.',
         type: 'offer',
+        audience: 'seller',
         data:
             'offer_status|${offer.id}|${widget.needId}|${widget.needTitle}|$_currentUserId|$_currentUserName|${offer.deliveryTime}|${offer.offeredPrice.toStringAsFixed(0)}',
       );
@@ -589,30 +590,30 @@ class _ChatScreenState extends State<ChatScreen> {
     required OfferModel? offer,
   }) async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _isSending) return;
+    if (text.isEmpty) return;
 
     if (chatDisabled) {
       _showSnack(_disabledMessage(offer));
       return;
     }
 
-    setState(() => _isSending = true);
+    // WhatsApp-style optimistic send: clear the field and fire the write
+    // without blocking the send button. Firebase's local-first write makes the
+    // message appear in the stream instantly; no spinner needed.
     _controller.clear();
+    _scrollToBottom();
 
-    try {
-      await _chatService.sendMessage(
-        receiverId: widget.otherUserId,
-        receiverName: widget.otherUserName,
-        needId: widget.needId,
-        needTitle: widget.needTitle,
-        content: text,
-      );
-      _scrollToBottom();
-    } catch (e) {
+    _chatService
+        .sendMessage(
+      receiverId: widget.otherUserId,
+      receiverName: widget.otherUserName,
+      needId: widget.needId,
+      needTitle: widget.needTitle,
+      content: text,
+    )
+        .catchError((e) {
       _showSnack('Failed to send: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
+    });
   }
 
   void _showSnack(String message, {bool isError = false}) {
@@ -1253,19 +1254,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-                child: _isSending
-                    ? const Padding(
-                        padding: EdgeInsets.all(13),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Icon(
-                        _hasText ? Icons.send_rounded : Icons.mic_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                child: Icon(
+                  _hasText ? Icons.send_rounded : Icons.mic_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
           ],

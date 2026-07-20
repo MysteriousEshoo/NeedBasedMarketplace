@@ -122,9 +122,18 @@ class RealtimeAlertService {
       if (value is! Map) return;
 
       final data = Map<dynamic, dynamic>.from(value);
-      final title = (data['title'] ?? '').toString();
+      var title = (data['title'] ?? '').toString();
       final body = (data['body'] ?? '').toString();
       if (title.isEmpty && body.isEmpty) return;
+
+      // If this alert belongs to the OTHER side of the account (e.g. a seller
+      // chat message while the user is browsing in buyer mode), say so on top
+      // of the notification.
+      final audience = (data['audience'] ?? '').toString();
+      final currentMode = _isSellerMode ? 'seller' : 'buyer';
+      if (audience.isNotEmpty && audience != currentMode) {
+        title = 'From your $audience account · $title';
+      }
 
       LocalNotificationService.instance.show(title: title, body: body);
     });
@@ -170,6 +179,7 @@ class RealtimeAlertService {
         'body': '$authorName posted "$title" — budget Rs. $budget. '
             'Open Seller Dashboard to send an offer.',
         'type': 'need_match',
+        'audience': 'seller',
         'data': needId,
         'timestamp': ServerValue.timestamp,
         'seen': false,

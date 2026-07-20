@@ -8,7 +8,6 @@ import '../theme/app_palette.dart';
 import '../services/notification_service.dart';
 import '../services/history_service.dart';
 import '../services/chat_service.dart';
-import 'chat_screen.dart';
 
 class OfferSheet extends StatefulWidget {
   final legacy.Need need;
@@ -43,6 +42,17 @@ class _OfferSheetState extends State<OfferSheet> {
     _messageController.dispose();
     _customDeliveryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _runPostSubmitTask(
+    String label,
+    Future<void> Function() task,
+  ) async {
+    try {
+      await task();
+    } catch (error) {
+      debugPrint('$label failed after the offer was saved: $error');
+    }
   }
 
   Future<void> _submitOffer() async {
@@ -140,27 +150,38 @@ class _OfferSheetState extends State<OfferSheet> {
           .child(widget.need.id)
           .child('offers');
 
-      await needRef.set(widget.need.offers + 1);
-
-      final notificationService = NotificationService();
-      await notificationService.sendNotification(
-        userId: buyerId,
-        title: '📩 New Offer Received!',
-        body:
-            '$sellerName offered PKR ${_priceController.text.trim()} for "${widget.need.title}" (Delivery: $deliveryTime)',
-        type: 'offer',
-        data:
-            'offer_received|${offerRef.key}|${widget.need.id}|${widget.need.title}|${user.uid}|$sellerName|$deliveryTime|${_priceController.text.trim()}',
+      await _runPostSubmitTask(
+        'Offer count update',
+        () => needRef.set(widget.need.offers + 1),
       );
 
-      await notificationService.sendNotification(
-        userId: user.uid,
-        title: '✅ Offer Submitted!',
-        body:
-            'Your offer of PKR ${_priceController.text.trim()} for "${widget.need.title}" has been sent (Delivery: $deliveryTime)',
-        type: 'offer',
-        data:
-            'offer_submitted|${offerRef.key}|${widget.need.id}|${widget.need.title}|$buyerId|${widget.need.authorName}|$deliveryTime|${_priceController.text.trim()}',
+      final notificationService = NotificationService();
+      await _runPostSubmitTask(
+        'Buyer offer notification',
+        () => notificationService.sendNotification(
+          userId: buyerId,
+          title: '📩 New Offer Received!',
+          body:
+              '$sellerName offered PKR ${_priceController.text.trim()} for "${widget.need.title}" (Delivery: $deliveryTime)',
+          type: 'offer',
+          audience: 'buyer',
+          data:
+              'offer_received|${offerRef.key}|${widget.need.id}|${widget.need.title}|${user.uid}|$sellerName|$deliveryTime|${_priceController.text.trim()}',
+        ),
+      );
+
+      await _runPostSubmitTask(
+        'Seller offer confirmation',
+        () => notificationService.sendNotification(
+          userId: user.uid,
+          title: '✅ Offer Submitted!',
+          body:
+              'Your offer of PKR ${_priceController.text.trim()} for "${widget.need.title}" has been sent (Delivery: $deliveryTime)',
+          type: 'offer',
+          audience: 'seller',
+          data:
+              'offer_submitted|${offerRef.key}|${widget.need.id}|${widget.need.title}|$buyerId|${widget.need.authorName}|$deliveryTime|${_priceController.text.trim()}',
+        ),
       );
 
       if (!mounted) return;
@@ -168,39 +189,31 @@ class _OfferSheetState extends State<OfferSheet> {
 
       final chatService = ChatService();
 
-      await chatService.sendMessage(
-        receiverId: buyerId,
-        receiverName: widget.need.authorName.isNotEmpty
-            ? widget.need.authorName
-            : 'Buyer',
-        needId: widget.need.id,
-        needTitle: widget.need.title,
-        content:
-            '💰 Offer: PKR ${_priceController.text.trim()}\n⏱️ Delivery: $deliveryTime\n\n${_messageController.text.trim()}',
-        type: 'offer',
-        offerId: offerRef.key,
-        offerStatus: 'pending',
-        chatDisabled: true,
+      await _runPostSubmitTask(
+        'Initial offer chat message',
+        () => chatService.sendMessage(
+          receiverId: buyerId,
+          receiverName: widget.need.authorName.isNotEmpty
+              ? widget.need.authorName
+              : 'Buyer',
+          needId: widget.need.id,
+          needTitle: widget.need.title,
+          content:
+              '💰 Offer: PKR ${_priceController.text.trim()}\n⏱️ Delivery: $deliveryTime\n\n${_messageController.text.trim()}',
+          type: 'offer',
+          offerId: offerRef.key,
+          offerStatus: 'pending',
+          chatDisabled: true,
+        ),
       );
 
       if (!mounted) return;
 
       _showSuccess('Offer submitted successfully! 🎉');
 
-      Navigator.pop(context);
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            needId: widget.need.id,
-            needTitle: widget.need.title,
-            otherUserId: buyerId,
-            otherUserName: widget.need.authorName,
-            initialOfferId: offerRef.key,
-          ),
-        ),
-      );
+      Navigator.of(context).pop(true);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isSubmitting = false);
       _showError('Error: ${e.toString()}');
     }

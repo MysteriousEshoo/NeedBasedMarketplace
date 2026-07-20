@@ -7,6 +7,7 @@ import '../theme/app_palette.dart';
 import '../models/need_model.dart';
 import '../models/offer_model.dart';
 import '../repositories/marketplace_repository.dart';
+import '../services/chat_service.dart';
 import 'chat_screen.dart';
 import 'offer_sheet.dart';
 import 'need_detail_screen.dart';
@@ -20,6 +21,8 @@ class SellerDashboardFeed extends StatefulWidget {
 
 class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
   final List<Need> _needs = [];
+  final ChatService _chatService = ChatService();
+  final Map<String, Stream<OfferModel?>> _offerStreams = {};
   bool _isLoading = true;
   String? _error;
   StreamSubscription? _subscription;
@@ -166,6 +169,34 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NeedDetailScreen(need: need),
+      ),
+    );
+  }
+
+  Stream<OfferModel?> _offerStreamFor(Need need) {
+    return _offerStreams.putIfAbsent(
+      need.id,
+      () => _chatService.watchOfferForChat(
+        needId: need.id,
+        otherUserId: need.userId ?? need.authorId ?? '',
+      ),
+    );
+  }
+
+  void _openAcceptedChat(Need need, OfferModel offer) {
+    final buyerId = need.userId ?? need.authorId ?? '';
+    if (buyerId.isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          needId: need.id,
+          needTitle: need.title,
+          otherUserId: buyerId,
+          otherUserName: need.userName ?? need.authorName,
+          initialOfferId: offer.id,
+        ),
       ),
     );
   }
@@ -414,37 +445,33 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                 ),
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _showOfferSheet(context, need),
-                      icon: const Icon(
-                        Icons.local_offer_rounded,
-                        size: 16,
+              StreamBuilder<OfferModel?>(
+                stream: _offerStreamFor(need),
+                builder: (context, snapshot) {
+                  final offer = snapshot.data;
+                  final isAccepted = offer?.status == 'accepted';
+
+                  if (!isAccepted) {
+                    return SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showOfferSheet(context, need),
+                        icon: const Icon(
+                          Icons.local_offer_rounded,
+                          size: 16,
+                        ),
+                        label: const Text('Make Offer'),
                       ),
-                      label: const Text('Make Offer'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                    );
+                  }
+
+                  return SizedBox(
+                    width: double.infinity,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                       ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              needId: need.id,
-                              needTitle: need.title,
-                              otherUserId: need.userId ?? need.authorId ?? '',
-                              otherUserName: need.userName ?? need.authorName,
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: () => _openAcceptedChat(need, offer!),
                       icon: const Icon(
                         Icons.chat_bubble_rounded,
                         size: 16,
@@ -455,8 +482,8 @@ class _SellerDashboardFeedState extends State<SellerDashboardFeed> {
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ],
           ),

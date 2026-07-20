@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,10 +8,27 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../models/message_model.dart';
 import '../models/offer_model.dart';
+import 'notification_service.dart';
 
 class ChatService {
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final NotificationService _notificationService = NotificationService();
+
+  /// needId -> buyer (need author) id. The buyer of every chat is the need's
+  /// author, so one lookup per need is enough to tag both sides with a role.
+  static final Map<String, String> _needAuthorCache = {};
+
+  Future<String> _needAuthorId(String needId) async {
+    final cached = _needAuthorCache[needId];
+    if (cached != null) return cached;
+
+    final need = await getNeedDetails(needId);
+    final author =
+        (need?['authorId'] ?? need?['userId'] ?? '').toString();
+    if (author.isNotEmpty) _needAuthorCache[needId] = author;
+    return author;
+  }
 
   String getChannelId(String userId1, String userId2, String needId) {
     final ids = [userId1, userId2]..sort();
@@ -62,6 +81,70 @@ class ChatService {
       'zip' => 'application/zip',
       _ => 'application/octet-stream',
     };
+  }
+
+  Future<void> _runBestEffort(
+    String operation,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (error, stackTrace) {
+      developer.log(
+        '$operation failed after the chat message was saved.',
+        name: 'ChatService',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  String _messageNotificationBody(String type, String content) {
+    final label = switch (type) {
+      'voice' => 'Voice message',
+      'image' => 'Sent an image',
+      'video' => 'Sent a video',
+      'document' => 'Sent a document',
+      _ => content.replaceAll(RegExp(r'\s+'), ' ').trim(),
+    };
+
+    if (label.length <= 120) return label;
+    return '${label.substring(0, 117)}...';
+  }
+
+  Future<void> _sendMessageNotification({
+    required String receiverId,
+    required String senderId,
+    required String senderName,
+    required String needId,
+    required String needTitle,
+    required String content,
+    required String type,
+  }) async {
+    if (receiverId.isEmpty || receiverId == senderId) return;
+
+    // Tag which side of the receiver's account this message belongs to, so
+    // the app can label alerts that arrive while they are in the other mode.
+    final buyerId = await _needAuthorId(needId);
+    final receiverAudience =
+        buyerId.isEmpty ? null : (receiverId == buyerId ? 'buyer' : 'seller');
+
+    await _runBestEffort('Message notification', () {
+      return _notificationService.sendNotification(
+        userId: receiverId,
+        title: 'New message from $senderName',
+        body: _messageNotificationBody(type, content),
+        type: 'message',
+        audience: receiverAudience,
+        data: jsonEncode({
+          'action': 'chat_message',
+          'needId': needId,
+          'needTitle': needTitle,
+          'otherUserId': senderId,
+          'otherUserName': senderName,
+        }),
+      );
+    });
   }
 
   Future<void> _waitForUploadableFile(File file) async {
@@ -134,6 +217,17 @@ class ChatService {
 
     await msgRef.set(message.toMap());
 
+    // The need's author is always the buyer side of the chat; tag each side's
+    // preview with its own role so buyer-mode and seller-mode inboxes can be
+    // kept separate.
+    final buyerId = await _needAuthorId(message.needId);
+    final senderRole = buyerId.isEmpty
+        ? null
+        : (message.senderId == buyerId ? 'buyer' : 'seller');
+    final receiverRole = senderRole == null
+        ? null
+        : (senderRole == 'buyer' ? 'seller' : 'buyer');
+
     final senderChatData = <String, Object?>{
       'channelId': channelId,
       'needId': message.needId,
@@ -144,41 +238,47 @@ class ChatService {
       'lastTimestamp': nowMillis,
       'unreadCount': 0,
       'iAmSender': true,
+      if (senderRole != null) 'myRole': senderRole,
       if (offerId != null) 'offerId': offerId,
       if (offerStatus != null) 'offerStatus': offerStatus,
       if (chatDisabled != null) 'chatDisabled': chatDisabled,
     };
 
-    await _db
-        .child('user_chats')
-        .child(message.senderId)
-        .child(channelId)
-        .update(senderChatData);
+    await _runBestEffort('Sender chat preview update', () {
+      return _db
+          .child('user_chats')
+          .child(message.senderId)
+          .child(channelId)
+          .update(senderChatData);
+    });
 
     final receiverChatRef =
         _db.child('user_chats').child(message.receiverId).child(channelId);
-    final unreadSnap = await receiverChatRef.child('unreadCount').get();
-    final currentUnread = _asInt(unreadSnap.value);
+    await _runBestEffort('Receiver chat preview update', () {
+      final receiverChatData = <String, Object?>{
+        'channelId': channelId,
+        'needId': message.needId,
+        'needTitle': needTitle,
+        'peerId': message.senderId,
+        'peerName': currentUserPeerName,
+        'lastMessage': lastMessage,
+        'lastTimestamp': nowMillis,
+        'unreadCount': ServerValue.increment(1),
+        'iAmSender': false,
+        if (receiverRole != null) 'myRole': receiverRole,
+        if (offerId != null) 'offerId': offerId,
+        if (offerStatus != null) 'offerStatus': offerStatus,
+        if (chatDisabled != null) 'chatDisabled': chatDisabled,
+      };
 
-    final receiverChatData = <String, Object?>{
-      'channelId': channelId,
-      'needId': message.needId,
-      'needTitle': needTitle,
-      'peerId': message.senderId,
-      'peerName': currentUserPeerName,
-      'lastMessage': lastMessage,
-      'lastTimestamp': nowMillis,
-      'unreadCount': currentUnread + 1,
-      'iAmSender': false,
-      if (offerId != null) 'offerId': offerId,
-      if (offerStatus != null) 'offerStatus': offerStatus,
-      if (chatDisabled != null) 'chatDisabled': chatDisabled,
-    };
-
-    await receiverChatRef.update(receiverChatData);
+      return receiverChatRef.update(receiverChatData);
+    });
 
     if (markDelivered) {
-      await msgRef.child('status').set('delivered');
+      await _runBestEffort(
+        'Message delivery status update',
+        () => msgRef.child('status').set('delivered'),
+      );
     }
   }
 
@@ -224,6 +324,18 @@ class ChatService {
       offerStatus: offerStatus,
       chatDisabled: chatDisabled,
     );
+
+    if (type != 'offer' && type != 'system') {
+      await _sendMessageNotification(
+        receiverId: receiverId,
+        senderId: user.uid,
+        senderName: senderName,
+        needId: needId,
+        needTitle: needTitle,
+        content: content,
+        type: type,
+      );
+    }
   }
 
   Future<void> sendSystemMessage({
@@ -323,6 +435,16 @@ class ChatService {
       lastMessage: 'Voice message',
       currentUserPeerName: senderName,
     );
+
+    await _sendMessageNotification(
+      receiverId: receiverId,
+      senderId: user.uid,
+      senderName: senderName,
+      needId: needId,
+      needTitle: needTitle,
+      content: 'Voice message',
+      type: 'voice',
+    );
   }
 
   Future<String> uploadFile({
@@ -398,6 +520,16 @@ class ChatService {
       lastMessage: label,
       currentUserPeerName: senderName,
     );
+
+    await _sendMessageNotification(
+      receiverId: receiverId,
+      senderId: user.uid,
+      senderName: senderName,
+      needId: needId,
+      needTitle: needTitle,
+      content: label,
+      type: type,
+    );
   }
 
   Stream<OfferModel?> watchOfferForChat({
@@ -453,6 +585,7 @@ class ChatService {
       'needTitle': needTitle,
       'peerId': sellerId,
       'peerName': sellerName,
+      'myRole': 'buyer',
       'offerId': offerId,
       'offerStatus': status,
       'chatDisabled': chatDisabled,
@@ -466,6 +599,7 @@ class ChatService {
       'needTitle': needTitle,
       'peerId': buyerId,
       'peerName': buyerName,
+      'myRole': 'seller',
       'offerId': offerId,
       'offerStatus': status,
       'chatDisabled': chatDisabled,
@@ -539,18 +673,44 @@ class ChatService {
   Stream<List<Map<String, dynamic>>> getUserChats(
     String userId, {
     bool acceptedOnly = false,
+    String? role,
   }) {
-    return _db.child('user_chats').child(userId).onValue.map((event) {
+    return _db.child('user_chats').child(userId).onValue.asyncMap((event) async {
       final chats = <Map<String, dynamic>>[];
       if (event.snapshot.value is Map) {
         final data = event.snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((channelId, value) {
-          if (value is! Map) return;
-          final chat = Map<String, dynamic>.from(value);
-          if (acceptedOnly && chat['offerStatus'] != 'accepted') return;
-          chat['channelId'] = channelId.toString();
+        for (final entry in data.entries) {
+          if (entry.value is! Map) continue;
+          final chat = Map<String, dynamic>.from(entry.value as Map);
+          if (acceptedOnly && chat['offerStatus'] != 'accepted') continue;
+          final channelId = entry.key.toString();
+          chat['channelId'] = channelId;
+
+          var myRole = (chat['myRole'] ?? '').toString();
+          if (myRole.isEmpty) {
+            // Backfill for chats created before role tagging existed: the
+            // need's author is the buyer side, everyone else is the seller.
+            final needId = (chat['needId'] ?? '').toString();
+            final buyerId = needId.isEmpty ? '' : await _needAuthorId(needId);
+            if (buyerId.isNotEmpty) {
+              myRole = buyerId == userId ? 'buyer' : 'seller';
+              chat['myRole'] = myRole;
+              await _runBestEffort('Chat role backfill', () {
+                return _db
+                    .child('user_chats')
+                    .child(userId)
+                    .child(channelId)
+                    .child('myRole')
+                    .set(myRole);
+              });
+            }
+          }
+
+          // Only hide a chat when we positively know it belongs to the other
+          // mode — chats whose role could not be resolved stay visible.
+          if (role != null && myRole.isNotEmpty && myRole != role) continue;
           chats.add(chat);
-        });
+        }
         chats.sort((a, b) {
           final bTime = _asInt(b['lastTimestamp']);
           final aTime = _asInt(a['lastTimestamp']);

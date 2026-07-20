@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +8,7 @@ import '../models/notification_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
+import '../providers/settings_provider.dart';
 import 'chat_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
@@ -30,8 +33,34 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
     await _notificationService.markAsSeen(_userId!, notification.id);
 
-    if (!mounted) return;
-    if (notification.type != 'offer' || notification.data == null) return;
+    if (!mounted || notification.data == null) return;
+
+    if (notification.type == 'message') {
+      final payload = _MessageNotificationPayload.tryParse(notification.data!);
+      if (payload == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This message notification is missing chat details.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            needId: payload.needId,
+            needTitle: payload.needTitle,
+            otherUserId: payload.otherUserId,
+            otherUserName: payload.otherUserName,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (notification.type != 'offer') return;
 
     final payload = _OfferNotificationPayload.tryParse(notification.data!);
     if (payload == null) {
@@ -62,7 +91,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
   Widget build(BuildContext context) {
     final c = context.palette;
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final settingsProvider = Provider.of<SettingsProvider>(context);
     final isDark = themeProvider.isDarkMode;
+    final currentMode = settingsProvider.isBuyerMode ? 'buyer' : 'seller';
     final Color bg = isDark ? AppColors.background : const Color(0xFFF1F5F9);
     final Color surface = isDark ? AppColors.surface : Colors.white;
     final Color border = isDark ? AppColors.border : const Color(0xFFE2E8F0);
@@ -170,8 +201,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final notification = notifications[index];
+              final audience = notification.audience ?? '';
               return _NotificationTile(
                 notification: notification,
+                fromOtherMode: audience.isNotEmpty && audience != currentMode,
                 surface: surface,
                 border: border,
                 textPrimary: textPrimary,
@@ -183,6 +216,40 @@ class _NotificationScreenState extends State<NotificationScreen> {
         },
       ),
     );
+  }
+}
+
+class _MessageNotificationPayload {
+  final String needId;
+  final String needTitle;
+  final String otherUserId;
+  final String otherUserName;
+
+  const _MessageNotificationPayload({
+    required this.needId,
+    required this.needTitle,
+    required this.otherUserId,
+    required this.otherUserName,
+  });
+
+  static _MessageNotificationPayload? tryParse(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map || decoded['action'] != 'chat_message') return null;
+
+      final needId = (decoded['needId'] ?? '').toString();
+      final otherUserId = (decoded['otherUserId'] ?? '').toString();
+      if (needId.isEmpty || otherUserId.isEmpty) return null;
+
+      return _MessageNotificationPayload(
+        needId: needId,
+        needTitle: (decoded['needTitle'] ?? 'Need').toString(),
+        otherUserId: otherUserId,
+        otherUserName: (decoded['otherUserName'] ?? 'User').toString(),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -237,11 +304,13 @@ class _OfferNotificationPayload {
 
 class _NotificationTile extends StatelessWidget {
   final NotificationModel notification;
+  final bool fromOtherMode;
   final Color surface, border, textPrimary, textSecondary;
   final VoidCallback onTap;
 
   const _NotificationTile({
     required this.notification,
+    required this.fromOtherMode,
     required this.surface,
     required this.border,
     required this.textPrimary,
@@ -316,6 +385,28 @@ class _NotificationTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (fromOtherMode)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'From your ${notification.audience} account',
+                          style: const TextStyle(
+                            color: AppColors.primaryLight,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
                   Text(
                     notification.title,
                     style: TextStyle(

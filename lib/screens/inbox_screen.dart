@@ -60,7 +60,7 @@ class _InboxScreenState extends State<InboxScreen> {
         backgroundColor: surface,
         elevation: 0,
         title: Text(
-          'Messages',
+          isBuyerMode ? 'Messages · Buyer' : 'Messages · Seller',
           style: TextStyle(color: textPrimary, fontWeight: FontWeight.w800),
         ),
         iconTheme: IconThemeData(color: textPrimary),
@@ -70,9 +70,14 @@ class _InboxScreenState extends State<InboxScreen> {
         ),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
+        // Buyer mode only shows chats where this user is the buyer, seller
+        // mode only the chats where they are the seller. Both stay stored in
+        // the database until the user deletes them.
+        key: ValueKey(isBuyerMode),
         stream: _chatService.getUserChats(
           _currentUserId,
           acceptedOnly: true,
+          role: isBuyerMode ? 'buyer' : 'seller',
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

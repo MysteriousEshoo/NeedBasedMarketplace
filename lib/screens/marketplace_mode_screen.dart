@@ -127,6 +127,7 @@ class _MarketplaceModeScreenState extends State<MarketplaceModeScreen> {
     // Turning Seller Mode OFF is always allowed.
     if (!value) {
       await _toggleSellerMode(false);
+      await settingsProvider.setBuyerMode(true);
       return;
     }
 

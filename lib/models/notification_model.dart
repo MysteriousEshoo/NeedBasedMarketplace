@@ -4,6 +4,10 @@ class NotificationModel {
   final String body;
   final String type; // 'offer', 'message', 'system'
   final String? data;
+
+  /// Which side of the account this notification belongs to: 'buyer' or
+  /// 'seller'. Null for general notifications that apply to both.
+  final String? audience;
   final DateTime timestamp;
   final bool seen;
 
@@ -13,6 +17,7 @@ class NotificationModel {
     required this.body,
     required this.type,
     this.data,
+    this.audience,
     required this.timestamp,
     this.seen = false,
   });
@@ -23,6 +28,7 @@ class NotificationModel {
       'body': body,
       'type': type,
       'data': data,
+      if (audience != null) 'audience': audience,
       'timestamp': timestamp.millisecondsSinceEpoch,
       'seen': seen,
     };
@@ -35,6 +41,7 @@ class NotificationModel {
       body: map['body'] ?? '',
       type: map['type'] ?? 'system',
       data: map['data'],
+      audience: map['audience'],
       timestamp: map['timestamp'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['timestamp'])
           : DateTime.now(),

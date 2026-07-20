@@ -11,6 +11,7 @@ class NotificationService {
     required String body,
     required String type,
     String? data,
+    String? audience,
   }) async {
     final notification = NotificationModel(
       id: '',
@@ -18,6 +19,7 @@ class NotificationService {
       body: body,
       type: type,
       data: data,
+      audience: audience,
       timestamp: DateTime.now(),
       seen: false,
     );
@@ -27,9 +29,6 @@ class NotificationService {
         .child(userId)
         .push()
         .set(notification.toMap());
-
-    print('🔔 Notification sent to: $userId');
-    print('🔔 Title: $title');
   }
 
   Stream<List<NotificationModel>> getNotifications(String userId) {

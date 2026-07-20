@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/need_model.dart';
+import '../models/offer_model.dart';
+import '../services/chat_service.dart';
 import '../services/history_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
@@ -24,7 +25,8 @@ class NeedDetailScreen extends StatefulWidget {
 }
 
 class _NeedDetailScreenState extends State<NeedDetailScreen> {
-  bool _isSellerMode = false;
+  final ChatService _chatService = ChatService();
+  late final Stream<OfferModel?> _offerStream;
   String? _sellerId;
 
   // Mutable copy so the screen can refresh in place after an edit.
@@ -34,7 +36,10 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
   void initState() {
     super.initState();
     _need = widget.need;
-    _listenUserRole();
+    _offerStream = _chatService.watchOfferForChat(
+      needId: _need.id,
+      otherUserId: _need.authorId ?? _need.userId ?? '',
+    );
     _findChatSeller();
 
     // 📜 Chrome-style history: record that this need was visited.
@@ -45,22 +50,6 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
       subtitle: _need.category,
       refId: _need.id,
     );
-  }
-
-  void _listenUserRole() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .snapshots()
-        .listen((snap) {
-      if (snap.exists && mounted) {
-        setState(() {
-          _isSellerMode = snap.data()?['isSellerMode'] ?? false;
-        });
-      }
-    });
   }
 
   void _findChatSeller() {
@@ -538,6 +527,44 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
     final isMyNeed = currentUserId.isNotEmpty &&
         (_need.authorId ?? _need.userId) == currentUserId;
 
+    if (!isMyNeed) {
+      return StreamBuilder<OfferModel?>(
+        stream: _offerStream,
+        builder: (context, snapshot) {
+          final offer = snapshot.data;
+          final isAccepted = offer?.status == 'accepted';
+
+          return _BottomActionContainer(
+            surface: surface,
+            border: border,
+            child: isAccepted
+                ? FilledButton.icon(
+                    onPressed: _openChat,
+                    icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                    label: const Text('Chat'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  )
+                : FilledButton.icon(
+                    onPressed: _openOfferSheet,
+                    icon: const Icon(Icons.local_offer_rounded, size: 18),
+                    label: const Text('Make Offer'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+          );
+        },
+      );
+    }
+
     bool showChat = true;
     if (isMyNeed) {
       showChat = _sellerId != null && _sellerId!.isNotEmpty;
@@ -559,20 +586,6 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
                 onTap: _openChat,
               ),
             if (showChat) const SizedBox(width: 12),
-            if (_isSellerMode && !isMyNeed)
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _openOfferSheet,
-                  icon: const Icon(Icons.local_offer_rounded, size: 18),
-                  label: const Text('Make Offer'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
             if (isMyNeed)
               Expanded(
                 child: OutlinedButton.icon(
@@ -590,6 +603,30 @@ class _NeedDetailScreenState extends State<NeedDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BottomActionContainer extends StatelessWidget {
+  final Color surface;
+  final Color border;
+  final Widget child;
+
+  const _BottomActionContainer({
+    required this.surface,
+    required this.border,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: border)),
+      ),
+      child: SafeArea(top: false, child: child),
     );
   }
 }
