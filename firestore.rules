@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// NeedBase Firestore rules — NOT YET DEPLOYED.
+// studyplanner1367's Firestore is shared with other apps; deploying this file
+// REPLACES the project's current rules, which cannot be read via the CLI.
+// The other (active) apps on this project may depend on their own collections —
+// merge their rules in before deploying, or move NeedBase to its own project.
+//
+// NeedBase's actual Firestore usage today: the `users` collection (role +
+// profile docs, written at sign-up in auth_screen.dart and read in main.dart /
+// splash_screen.dart / main_shell.dart). marketplace_repository.dart also
+// declares needs/offers/notifications collections but is only referenced by
+// seller_dashboard_feed.dart.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if request.auth != null;
+      }
+    }
+
+    match /needs/{needId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    match /offers/{offerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}

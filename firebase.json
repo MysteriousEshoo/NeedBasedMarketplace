@@ -1,9 +1,1 @@
-{
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs18"
-  },
-  "database": {
-    "rules": "database.rules.json"
-  }
-}
+﻿{"functions":{"source":"functions","runtime":"nodejs20"},"database":{"rules":"database.rules.json"},"flutter":{"platforms":{"android":{"default":{"projectId":"studyplanner1367","appId":"1:636560866742:android:0f263c75201551dfa0d517","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"studyplanner1367","configurations":{"android":"1:636560866742:android:0f263c75201551dfa0d517","web":"1:636560866742:web:3a00f1878d069b5ea0d517"}}}}}}

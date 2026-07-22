@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.thevibes.needbasemarketplace"
+    namespace = "com.thevibes.needbase"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -22,7 +22,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.thevibes.needbasemarketplace"
+        applicationId = "com.thevibes.needbase"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

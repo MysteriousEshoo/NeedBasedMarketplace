@@ -18,34 +18,28 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBnRoxBCDxNySdLvRR_TasGhpFm7QGDrGM',
-    appId: '1:976134004608:android:1d48ec9ea544c31db16b65',
-    messagingSenderId: '976134004608',
-    projectId: 'needbasedmarketplace',
-    databaseURL:
-        'https://needbasedmarketplace-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'needbasedmarketplace.firebasestorage.app',
+    apiKey: 'AIzaSyAJlk1DnGcNrNtL_OmTyJPx7nMPxDlkEV0',
+    appId: '1:636560866742:android:0f263c75201551dfa0d517',
+    messagingSenderId: '636560866742',
+    projectId: 'studyplanner1367',
+    databaseURL: 'https://studyplanner1367-default-rtdb.firebaseio.com',
+    storageBucket: 'studyplanner1367.firebasestorage.app',
   );
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBnRoxBCDxNySdLvRR_TasGhpFm7QGDrGM',
-    appId: '1:976134004608:android:1d48ec9ea544c31db16b65',
-    messagingSenderId: '976134004608',
-    projectId: 'needbasedmarketplace',
-    databaseURL:
-        'https://needbasedmarketplace-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'needbasedmarketplace.firebasestorage.app',
-    iosBundleId: 'com.esha.marketplace',
-  );
+  static FirebaseOptions get ios => throw UnsupportedError(
+        'DefaultFirebaseOptions are not configured for iOS - '
+        'run FlutterFire configure with --platforms=ios to register an iOS app.',
+      );
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA1ZvbhOuNkRmvn9PFVgp_JJ6ZC_oqPwVc',
-    authDomain: 'needbasedmarketplace.firebaseapp.com',
-    databaseURL:
-        'https://needbasedmarketplace-default-rtdb.asia-southeast1.firebasedatabase.app',
-    projectId: 'needbasedmarketplace',
-    storageBucket: 'needbasedmarketplace.firebasestorage.app',
-    messagingSenderId: '976134004608',
-    appId: '1:976134004608:web:bed2a0b2bbf65853b16b65',
+    apiKey: 'AIzaSyB5Wj8YpawOhKh8LkpAEzdR2XTEEnSYQnk',
+    appId: '1:636560866742:web:3a00f1878d069b5ea0d517',
+    messagingSenderId: '636560866742',
+    projectId: 'studyplanner1367',
+    authDomain: 'studyplanner1367.firebaseapp.com',
+    databaseURL: 'https://studyplanner1367-default-rtdb.firebaseio.com',
+    storageBucket: 'studyplanner1367.firebasestorage.app',
+    measurementId: 'G-RD421TJP5C',
   );
+
 }

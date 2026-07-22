@@ -1,0 +1,97 @@
+{
+  "rules": {
+    "app_config": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "needs": {
+      ".read": "auth != null",
+      ".indexOn": ["id", "authorId", "userId", "createdAt"],
+      "$needId": {
+        ".write": "auth != null"
+      }
+    },
+    "offers": {
+      "$needId": {
+        ".read": "auth != null",
+        ".indexOn": ["sellerId", "createdAt"],
+        "$offerId": {
+          ".write": "auth != null"
+        }
+      }
+    },
+    "chats": {
+      "$needId": {
+        "$channelId": {
+          ".read": "auth != null && $channelId.contains(auth.uid)",
+          ".write": "auth != null && $channelId.contains(auth.uid)",
+          ".indexOn": ["timestamp"]
+        }
+      }
+    },
+    "user_chats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    },
+    "fcm_tokens": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "user_wallets": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "user_banks": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "user_settings": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "users_saved_needs": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "seller_requests": {
+      ".read": "auth != null",
+      "$id": {
+        ".write": "auth != null"
+      }
+    },
+    "faqs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "calls": {
+      "$callId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
