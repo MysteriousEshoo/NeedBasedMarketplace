@@ -10,7 +10,6 @@ import '../theme/app_palette.dart';
 import '../providers/theme_provider.dart';
 import '../services/notification_service.dart';
 import '../widgets/brand_logo.dart';
-import '../widgets/simple_guide_tooltip.dart';
 import 'home_screen.dart';
 import 'need_detail_screen.dart';
 import 'post_need_screen.dart';
@@ -43,7 +42,6 @@ class _MainShellState extends State<MainShell> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    bool firstRoleCheck = true;
     FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -55,15 +53,6 @@ class _MainShellState extends State<MainShell> {
           setState(() {
             _isSellerModeActive = data['isSellerMode'] ?? false;
           });
-          // 🧭 First-time guide: only trigger after we know the user's role
-          // and only if they're in buyer mode.
-          if (firstRoleCheck && !_isSellerModeActive && mounted) {
-            firstRoleCheck = false;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _showHomeGuide();
-            });
-          }
-          firstRoleCheck = false;
         }
       }
     });
@@ -118,104 +107,6 @@ class _MainShellState extends State<MainShell> {
       return;
     }
     setState(() => _tabIndex = index);
-  }
-
-  /// Compute bottom nav item position by index
-  Offset _navItemPosition(int tabIndex, double screenWidth, double screenHeight) {
-    // 5 columns: 4 tabs + center spacer for FAB
-    const int totalColumns = 5;
-    final navItemWidth = screenWidth / totalColumns;
-    // The nav bar sits at the bottom; the item icon centre is roughly at
-    // the column's midpoint, with a small vertical offset.
-    final left = navItemWidth * tabIndex + (navItemWidth - 40) / 2;
-    final top = screenHeight - 55;
-    return Offset(left, top);
-  }
-
-  // Show first-time user guide tooltips — only in buyer mode, only once.
-  Future<void> _showHomeGuide() async {
-    // Skip if guide already seen, or if seller mode is active
-    if (await SimpleGuideTooltip.alreadySeen()) return;
-    if (_isSellerModeActive) return;
-    if (!mounted) return;
-
-    final screenSize = MediaQuery.of(context).size;
-
-    // ----------------------------------------------------------------
-    // STEP 1 — Home screen: point at the + FAB button
-    // ----------------------------------------------------------------
-    final fabSize = 56.0;
-    final fabLeft = (screenSize.width - fabSize) / 2;
-    final fabTop = screenSize.height - 130;
-
-    await SimpleGuideTooltip.show(
-      context: context,
-      text: 'Tap the + button to post your needs and let sellers find you! 📝',
-      targetPosition: Offset(fabLeft, fabTop),
-      targetSize: Size(fabSize, fabSize),
-      showArrowUp: false,
-    );
-    if (!mounted) return;
-
-    // ----------------------------------------------------------------
-    // STEP 2 — Switch to Profile tab, then tooltip
-    // ----------------------------------------------------------------
-    setState(() => _tabIndex = 4);
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
-    await SimpleGuideTooltip.show(
-      context: context,
-      text:
-          'Here is your profile screen — edit your profile, access settings, and more! ✨',
-      targetPosition:
-          _navItemPosition(4, screenSize.width, screenSize.height),
-      targetSize: const Size(40, 40),
-      showArrowUp: true,
-    );
-    if (!mounted) return;
-
-    // ----------------------------------------------------------------
-    // STEP 3 — Switch to Inbox/Messages tab, then tooltip
-    // ----------------------------------------------------------------
-    setState(() => _tabIndex = 3);
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
-    await SimpleGuideTooltip.show(
-      context: context,
-      text:
-          'Your messages, offers and negotiations with sellers appear here! 💬',
-      targetPosition:
-          _navItemPosition(3, screenSize.width, screenSize.height),
-      targetSize: const Size(40, 40),
-      showArrowUp: true,
-    );
-    if (!mounted) return;
-
-    // ----------------------------------------------------------------
-    // STEP 4 — Switch to Saved tab, then tooltip
-    // ----------------------------------------------------------------
-    setState(() => _tabIndex = 1);
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
-    await SimpleGuideTooltip.show(
-      context: context,
-      text:
-          'Save interesting needs by tapping the bookmark icon to view them later! 🔖',
-      targetPosition:
-          _navItemPosition(1, screenSize.width, screenSize.height),
-      targetSize: const Size(40, 40),
-      showArrowUp: true,
-    );
-    if (!mounted) return;
-
-    // ----------------------------------------------------------------
-    // ALL DONE — switch back to Home tab & mark guide as seen
-    // ----------------------------------------------------------------
-    setState(() => _tabIndex = 0);
-    await SimpleGuideTooltip.markAsSeen();
   }
 
   @override
