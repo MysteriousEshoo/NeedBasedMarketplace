@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -15,6 +17,8 @@ import 'providers/settings_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/notification_provider.dart';
 import 'providers/seller_request_provider.dart';
+import 'models/need_model.dart';
+import 'services/fcm_service.dart';
 import 'services/realtime_alert_service.dart';
 
 void main() async {
@@ -37,9 +41,17 @@ void main() async {
     debugPrint('Firebase init failed: $e');
   }
 
+  // 📡 Load live app config (categories, locations, etc.) from Firebase RTDB
+  // so the admin can customise dropdowns without pushing a new build.
+  unawaited(AppConfigService.fetch());
+
   // 🔔 WhatsApp-style alerts: heads-up popups for every incoming in-app
   // notification + seller category-matched need alerts. Auth-bound: starts
   // on login, stops on logout.
+  //
+  // FCM Push Notifications are initialised inside [RealtimeAlertService.start]
+  // because it already has the authenticated user context. The FCM token is
+  // saved to RTDB right away so the Cloud Function can target it.
   RealtimeAlertService.instance.bindToAuth();
 
   runApp(
@@ -89,6 +101,9 @@ class NeedMarketplaceApp extends StatelessWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
+      // 🔗 navigatorKey enables FCMService to navigate from notification
+      // taps without requiring a BuildContext (background/terminated state).
+      navigatorKey: FCMService.navigatorKey,
       home: const _LaunchGate(),
     );
   }

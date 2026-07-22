@@ -508,7 +508,7 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
           ),
           child: Column(
             children: [
-              _buildFakeToolbar(),
+              _buildCharCounter(),
               const Divider(height: 1),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -685,24 +685,47 @@ class _PostNeedFlowScreenState extends State<PostNeedFlowScreen> {
     );
   }
 
-  Widget _buildFakeToolbar() {
-    const icons = [
-      Icons.format_bold_rounded,
-      Icons.format_italic_rounded,
-      Icons.format_list_bulleted_rounded,
-      Icons.link_rounded,
-    ];
+  /// Real-time character counter — replaces the old fake toolbar.
+  /// Shows a live progress bar and count so the user knows how much
+  /// detail they have added.
+  Widget _buildCharCounter() {
+    final c = context.palette;
+    final count = _descriptionController.text.length;
+    const int limit = 1000;
+    final double ratio = (count / limit).clamp(0.0, 1.0);
+    final Color barColor = ratio < 0.8
+        ? AppColors.primary
+        : (ratio < 0.95
+            ? AppColors.urgentMedium
+            : AppColors.urgentHigh);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
-        children: icons
-            .map(
-              (i) => Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Icon(i, size: 20, color: context.palette.textSecondary),
+        children: [
+          Icon(Icons.text_fields_rounded, size: 18, color: c.textTertiary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ratio,
+                backgroundColor: c.border,
+                color: barColor,
+                minHeight: 4,
               ),
-            )
-            .toList(),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '$count / $limit',
+            style: TextStyle(
+              color: barColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

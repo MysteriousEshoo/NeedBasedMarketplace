@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 import '../models/seller_request_model.dart';
+import 'fcm_service.dart';
 import 'local_notification_service.dart';
 
 /// 📡 Real-time alert engine (WhatsApp style).
@@ -85,6 +86,9 @@ class RealtimeAlertService {
 
     await LocalNotificationService.instance.init();
 
+    // 🔔 FCM: register token on login, remove on stop.
+    await FCMService.instance.init();
+
     _listenToSettings();
     _listenToSellerProfile();
     _listenToIncomingNotifications();
@@ -102,6 +106,11 @@ class RealtimeAlertService {
     _settingsSub = null;
     _sellerReqSub = null;
     _userDocSub = null;
+
+    // 🔔 FCM: remove token on logout so the Cloud Function stops sending
+    // push notifications to this device.
+    FCMService.instance.removeToken();
+
     _uid = null;
   }
 

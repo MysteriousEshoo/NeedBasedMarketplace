@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import '../models/need_model.dart';
 import '../models/need_model.dart' as legacy;
 import '../models/offer_model.dart';
 import '../theme/app_colors.dart';
@@ -24,14 +25,7 @@ class _OfferSheetState extends State<OfferSheet> {
   final _messageController = TextEditingController();
   bool _isSubmitting = false;
 
-  final List<String> _deliveryOptions = [
-    '24 hours',
-    '3 days',
-    '1 week',
-    '2 weeks',
-    '1 month',
-    'Custom',
-  ];
+  List<String> get _deliveryOptions => MockData.deliveryOptions;
   String _selectedDelivery = '3 days';
   bool _showCustomDelivery = false;
   final _customDeliveryController = TextEditingController();

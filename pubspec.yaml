@@ -40,6 +40,9 @@ dependencies:
 
   # ✅ NEW: WhatsApp-style heads-up notifications
   flutter_local_notifications: ^19.0.0
+  
+  # ✅ NEW: FCM Push Notifications
+  firebase_messaging: ^15.1.3
 
 dev_dependencies:
   flutter_lints: ^4.0.0

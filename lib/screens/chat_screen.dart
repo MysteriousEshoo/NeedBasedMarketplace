@@ -116,12 +116,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   bool _isChatDisabled(OfferModel? offer) {
-    if (offer == null) return widget.initialOfferId != null;
+    // Don't block the UI while the offer is still loading — show the chat
+    // messages immediately and let the banner indicate loading state.
+    if (offer == null) return false;
     return offer.status != 'accepted';
   }
 
   String _disabledMessage(OfferModel? offer) {
-    if (offer == null) return 'Loading offer details...';
+    if (offer == null) return '';
     if (offer.status == 'pending' && _canRespondToOffer(offer)) {
       return 'Accept this offer to continue the chat, or reject it to close this seller for this need.';
     }
@@ -811,7 +813,10 @@ class _ChatScreenState extends State<ChatScreen> {
           body: Column(
             children: [
               _buildNeedBanner(),
-              if (offer != null) _buildOfferStatusBanner(offer),
+              if (offer != null)
+                _buildOfferStatusBanner(offer)
+              else if (widget.initialOfferId != null)
+                _buildOfferLoadingBanner(),
               Expanded(
                 child: StreamBuilder<List<MessageModel>>(
                   stream: _messagesStream,
@@ -905,6 +910,41 @@ class _ChatScreenState extends State<ChatScreen> {
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferLoadingBanner() {
+    final c = context.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.06),
+        border: Border(
+          bottom: BorderSide(color: AppColors.primary.withOpacity(0.12)),
+        ),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primaryLight,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Loading offer...',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

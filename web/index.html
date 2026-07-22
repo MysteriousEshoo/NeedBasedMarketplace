@@ -31,6 +31,15 @@
 
   <title>Need Base Marketplace</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Firebase Web SDK for FCM (push notifications).
+    Required by firebase_messaging_web on web platforms.
+    For system push notifications on web, a custom service worker is needed
+    — see https://firebase.google.com/docs/cloud-messaging/js/client
+  -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
 </head>
 <body>
   <!--

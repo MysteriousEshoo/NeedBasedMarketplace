@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import '../models/need_model.dart';
 import '../models/need_model.dart' as legacy;
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
@@ -44,14 +45,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _photoUrl;
   bool _emailVerified = true;
 
-  final List<String> _localCategories = [
-    'All',
-    'Mobile Phone',
-    'Tech & Development',
-    'Local Services',
-    'Electronics',
-    'Vehicles'
-  ];
+  /// Categories for the filter chips — loaded from [MockData] which pulls
+  /// from Firebase [AppConfigService] with hardcoded defaults as fallback.
+  List<String> get _filterChips => ['All', ...MockData.categories];
 
   @override
   void initState() {
@@ -144,6 +140,65 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => OfferSheet(need: need),
     );
+  }
+
+  // Delete a single need from Firebase RTDB
+  Future<void> _deleteNeed(legacy.Need need) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Need?'),
+        content: Text('Are you sure you want to delete "${need.title}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgentHigh,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await FirebaseDatabase.instance
+          .ref()
+          .child('needs')
+          .child(need.id)
+          .remove();
+      // Also remove associated offers
+      await FirebaseDatabase.instance
+          .ref()
+          .child('offers')
+          .child(need.id)
+          .remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Need deleted successfully'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting need: $e'),
+            backgroundColor: AppColors.urgentHigh,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   // ✅ FIXED: Get urgency color
@@ -354,9 +409,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             scrollDirection: Axis.horizontal,
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: _localCategories.length,
+                            itemCount: _filterChips.length,
                             itemBuilder: (context, index) {
-                              final cat = _localCategories[index];
+                              final cat = _filterChips[index];
                               final isSelected = _selectedCategory == cat;
                               return Padding(
                                 padding:
@@ -721,6 +776,43 @@ class _HomeScreenState extends State<HomeScreen> {
                           'Offer',
                           style: TextStyle(
                             color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              // Delete button for buyer mode (own needs only)
+              if (!widget.isSellerMode && (need.authorId == _currentUserId || need.userId == _currentUserId)) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => _deleteNeed(need),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.urgentHigh.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.urgentHigh.withValues(alpha: 0.3),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: const [
+                        Icon(
+                          Icons.delete_rounded,
+                          size: 14,
+                          color: AppColors.urgentHigh,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Delete',
+                          style: TextStyle(
+                            color: AppColors.urgentHigh,
                             fontWeight: FontWeight.w700,
                             fontSize: 11,
                           ),

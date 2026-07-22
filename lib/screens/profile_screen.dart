@@ -39,6 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _profileCity = '';
   String _profileBio = '';
   int _myNeedsCount = 0;
+  int _myOffersCount = 0;
   File? _selectedLocalImage;
   bool _isProfileLoading = true;
   bool _isUploadingAvatar = false;
@@ -49,6 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadUserData();
     _fetchMyNeedsCount();
+    _fetchMyOffersCount();
     _refreshEmailVerification();
   }
 
@@ -200,6 +202,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
       setState(() => _myNeedsCount = count);
+    });
+  }
+
+  /// 📊 Real-time count of offers this user has submitted as a seller.
+  /// Listens to all offers across all needs and counts matches.
+  void _fetchMyOffersCount() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    FirebaseDatabase.instance.ref().child('offers').onValue.listen((event) {
+      if (!mounted) return;
+      int count = 0;
+      if (event.snapshot.value != null) {
+        final Map<dynamic, dynamic> allOffersByNeed =
+            event.snapshot.value as Map<dynamic, dynamic>;
+        allOffersByNeed.forEach((needId, offersByNeed) {
+          if (offersByNeed is! Map) return;
+          final Map<dynamic, dynamic> offers = offersByNeed;
+          offers.forEach((offerKey, offerValue) {
+            if (offerValue is! Map) return;
+            final offerData = Map<String, dynamic>.from(offerValue);
+            if (offerData['sellerId'] == user.uid) {
+              count++;
+            }
+          });
+        });
+      }
+      setState(() => _myOffersCount = count);
     });
   }
 
@@ -468,17 +498,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Stack(
                                 alignment: Alignment.bottomRight,
                                 children: [
-                                  CircleAvatar(
-                                    radius: 46,
-                                    backgroundColor:
-                                        AppColors.primary.withOpacity(0.10),
-                                    backgroundImage: previewImage,
-                                    child: previewImage == null
-                                        ? const Icon(Icons.person_rounded,
-                                            color: AppColors.primaryLight,
-                                            size: 42)
-                                        : null,
-                                  ),
+                                  previewImage != null
+                                      ? ClipOval(
+                                          child: Image(
+                                            image: previewImage!,
+                                            width: 92,
+                                            height: 92,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                CircleAvatar(
+                                              radius: 46,
+                                              backgroundColor:
+                                                  AppColors.primary
+                                                      .withOpacity(0.10),
+                                              child: const Icon(
+                                                  Icons.person_rounded,
+                                                  color:
+                                                      AppColors.primaryLight,
+                                                  size: 42),
+                                            ),
+                                            loadingBuilder:
+                                                (_, child, progress) {
+                                              if (progress == null) {
+                                                return child;
+                                              }
+                                              return CircleAvatar(
+                                                radius: 46,
+                                                backgroundColor:
+                                                    AppColors.primary
+                                                        .withOpacity(0.10),
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: AppColors.primaryLight,
+                                                  value: progress.expectedTotalBytes !=
+                                                          null
+                                                      ? progress.cumulativeBytesLoaded /
+                                                          progress.expectedTotalBytes!
+                                                      : null,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        )
+                                      : CircleAvatar(
+                                          radius: 46,
+                                          backgroundColor:
+                                              AppColors.primary.withOpacity(0.10),
+                                          child: const Icon(
+                                              Icons.person_rounded,
+                                              color: AppColors.primaryLight,
+                                              size: 42),
+                                        ),
                                   Container(
                                     height: 32,
                                     width: 32,
@@ -735,15 +806,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // Rotating glow ring behind the avatar for a living 3D feel.
                 _PulsingAvatarRing(
                   child: ClipOval(
-                    child: CircleAvatar(
-                      radius: 52,
-                      backgroundColor: surface,
-                      backgroundImage: avatarImage,
-                      child: avatarImage == null
-                          ? const Icon(Icons.person_rounded,
-                              size: 54, color: AppColors.primaryLight)
-                          : null,
-                    ),
+                    child: avatarImage != null
+                        ? Image.network(
+                            _profilePhotoUrl!,
+                            width: 104,
+                            height: 104,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => CircleAvatar(
+                              radius: 52,
+                              backgroundColor: surface,
+                              child: const Icon(Icons.person_rounded,
+                                  size: 54,
+                                  color: AppColors.primaryLight),
+                            ),
+                            loadingBuilder: (_, child, progress) {
+                              if (progress == null) return child;
+                              return CircleAvatar(
+                                radius: 52,
+                                backgroundColor: surface,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primaryLight,
+                                ),
+                              );
+                            },
+                          )
+                        : CircleAvatar(
+                            radius: 52,
+                            backgroundColor: surface,
+                            child: const Icon(Icons.person_rounded,
+                                size: 54,
+                                color: AppColors.primaryLight),
+                          ),
                   ),
                 ),
                 GestureDetector(
@@ -920,7 +1014,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           _buildStatCard(Icons.description_rounded, 'My Needs',
               '$_myNeedsCount', surface, border, textPrimary, textTertiary),
-          _buildStatCard(Icons.handshake_rounded, 'Active Offers', '3', surface,
+          _buildStatCard(Icons.handshake_rounded, 'Active Offers',
+              '$_myOffersCount', surface,
               border, textPrimary, textTertiary),
           _buildStatCard(
               _isEmailVerified
@@ -2707,10 +2802,236 @@ class _FullEnterpriseSettingsScreenState
   }
 }
 
-class _MyNeedsScreen extends StatelessWidget {
+class _MyNeedsScreen extends StatefulWidget {
   final String userId;
   final String authorName;
   const _MyNeedsScreen({required this.userId, required this.authorName});
+
+  @override
+  State<_MyNeedsScreen> createState() => _MyNeedsScreenState();
+}
+
+class _MyNeedsScreenState extends State<_MyNeedsScreen> {
+  bool _isDeletingAll = false;
+  bool _isBuyerMode = true; // Default to buyer mode
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBuyerMode();
+  }
+
+  Future<void> _checkBuyerMode() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data() != null && mounted) {
+        setState(() {
+          _isBuyerMode = !(doc.data()!['isSellerMode'] ?? false);
+        });
+      }
+    } catch (_) {}
+  }
+
+  // Delete a single need from Firebase RTDB
+  Future<void> _deleteNeed(Need need) async {
+    // Verify ownership before allowing deletion
+    if (need.authorId != widget.userId && need.userId != widget.userId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You can only delete your own needs'),
+            backgroundColor: AppColors.urgentHigh,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Need?'),
+        content: Text('Are you sure you want to delete "${need.title}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgentHigh,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await FirebaseDatabase.instance
+          .ref()
+          .child('needs')
+          .child(need.id)
+          .remove();
+      // Also remove associated offers
+      await FirebaseDatabase.instance
+          .ref()
+          .child('offers')
+          .child(need.id)
+          .remove();
+      // Remove from saved needs for all users
+      final savedSnapshot = await FirebaseDatabase.instance
+          .ref()
+          .child('users_saved_needs')
+          .get();
+      if (savedSnapshot.exists && savedSnapshot.value is Map) {
+        final savedMap = savedSnapshot.value as Map<dynamic, dynamic>;
+        for (final entry in savedMap.entries) {
+          if (entry.value is Map) {
+            final userSaved = entry.value as Map<dynamic, dynamic>;
+            if (userSaved.containsKey(need.id)) {
+              await FirebaseDatabase.instance
+                  .ref()
+                  .child('users_saved_needs')
+                  .child(entry.key.toString())
+                  .child(need.id)
+                  .remove();
+            }
+          }
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Need deleted successfully'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting need: $e'),
+            backgroundColor: AppColors.urgentHigh,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // Delete ALL of user's needs from Firebase RTDB
+  Future<void> _deleteAllNeeds(List<Need> needs) async {
+    if (needs.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete All Needs?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete all ${needs.length} of your needs?'),
+            const SizedBox(height: 12),
+            Text(
+              'By proceeding yes all of your needs will be deleted forever you will never get them back.',
+              style: TextStyle(
+                color: AppColors.urgentHigh,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.urgentHigh,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete All', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingAll = true);
+
+    try {
+      for (final need in needs) {
+        await FirebaseDatabase.instance
+            .ref()
+            .child('needs')
+            .child(need.id)
+            .remove();
+        await FirebaseDatabase.instance
+            .ref()
+            .child('offers')
+            .child(need.id)
+            .remove();
+        // Remove from saved needs for all users
+        final savedSnapshot = await FirebaseDatabase.instance
+            .ref()
+            .child('users_saved_needs')
+            .get();
+        if (savedSnapshot.exists && savedSnapshot.value is Map) {
+          final savedMap = savedSnapshot.value as Map<dynamic, dynamic>;
+          for (final entry in savedMap.entries) {
+            if (entry.value is Map) {
+              final userSaved = entry.value as Map<dynamic, dynamic>;
+              if (userSaved.containsKey(need.id)) {
+                await FirebaseDatabase.instance
+                    .ref()
+                    .child('users_saved_needs')
+                    .child(entry.key.toString())
+                    .child(need.id)
+                    .remove();
+              }
+            }
+          }
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('All ${needs.length} needs deleted successfully'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting needs: $e'),
+            backgroundColor: AppColors.urgentHigh,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeletingAll = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2733,7 +3054,23 @@ class _MyNeedsScreen extends StatelessWidget {
           title: Text('My Active Requirements',
               style: TextStyle(color: textPrimary)),
           iconTheme: IconThemeData(color: textPrimary),
-          centerTitle: true),
+          centerTitle: true,
+          actions: [
+            if (_isDeletingAll)
+              const Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.urgentHigh,
+                    ),
+                  ),
+                ),
+              ),
+          ]),
       body: StreamBuilder(
         stream: FirebaseDatabase.instance.ref().child('needs').onValue,
         builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
@@ -2747,10 +3084,10 @@ class _MyNeedsScreen extends StatelessWidget {
                 snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
             allMap.forEach((key, value) {
               final data = Map<String, dynamic>.from(value as Map);
-              final ownsNeed = (userId.isNotEmpty &&
-                      (data['authorId'] == userId ||
-                          data['userId'] == userId)) ||
-                  data['authorName'] == authorName;
+              final ownsNeed = (widget.userId.isNotEmpty &&
+                      (data['authorId'] == widget.userId ||
+                          data['userId'] == widget.userId)) ||
+                  data['authorName'] == widget.authorName;
               if (ownsNeed) {
                 myFilteredList.add(Need(
                   id: key,
@@ -2790,37 +3127,101 @@ class _MyNeedsScreen extends StatelessWidget {
                     style: TextStyle(color: textSecondary)));
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(20),
-            itemCount: myFilteredList.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final item = myFilteredList[index];
-              return Card(
-                color: surface,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: BorderSide(color: border)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(16),
-                  onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => NeedDetailScreen(need: item))),
-                  title: Text(item.title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, color: textPrimary)),
-                  subtitle: Text(item.description,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: textSecondary)),
-                  trailing: Text('Rs. ${item.budget}',
-                      style: const TextStyle(
-                          color: AppColors.accent,
-                          fontWeight: FontWeight.bold)),
+          return Column(
+            children: [
+              // Delete All button at the top
+              if (myFilteredList.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isDeletingAll ? null : () => _deleteAllNeeds(myFilteredList),
+                      icon: _isDeletingAll
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.urgentHigh,
+                              ),
+                            )
+                          : const Icon(Icons.delete_forever_rounded, size: 18, color: AppColors.urgentHigh),
+                      label: Text(
+                        _isDeletingAll ? 'Deleting...' : 'Delete All My Needs',
+                        style: const TextStyle(
+                          color: AppColors.urgentHigh,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.urgentHigh, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              );
-            },
+              const SizedBox(height: 12),
+              // Needs list
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  itemCount: myFilteredList.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final item = myFilteredList[index];
+                    return Card(
+                      color: surface,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          side: BorderSide(color: border)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => NeedDetailScreen(need: item))),
+                        title: Text(item.title,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, color: textPrimary)),
+                        subtitle: Text(item.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: textSecondary)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Rs. ${item.budget}',
+                                style: const TextStyle(
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => _deleteNeed(item),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.urgentHigh.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.delete_rounded,
+                                  size: 18,
+                                  color: AppColors.urgentHigh,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),

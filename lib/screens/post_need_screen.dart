@@ -29,8 +29,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
   bool _isPublishing = false;
   DatabaseReference? _lastPostedNeedRef;
 
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  final _titleController = TextEditingController();    final _descriptionController = TextEditingController();
   final _budgetController = TextEditingController();
   final _companyController = TextEditingController();
 
@@ -45,7 +44,18 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
   String? _selectedLocation;
 
   @override
+  void initState() {
+    super.initState();
+    _descriptionController.addListener(_onDescriptionChanged);
+  }
+
+  void _onDescriptionChanged() {
+    if (mounted) setState(() {}); // rebuild char counter
+  }
+
+  @override
   void dispose() {
+    _descriptionController.removeListener(_onDescriptionChanged);
     _pageController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
@@ -648,7 +658,7 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
           ),
           child: Column(
             children: [
-              _buildFakeToolbar(),
+              _buildCharCounter(),
               const Divider(height: 1),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -857,25 +867,47 @@ class _PostNeedScreenState extends State<PostNeedScreen> {
     );
   }
 
-  Widget _buildFakeToolbar() {
+  /// Real-time character counter replacing the old fake toolbar.
+  /// Shows how many characters have been typed, with a soft limit hint of
+  /// 1000 characters so buyers write enough detail for quality offers.
+  Widget _buildCharCounter() {
     final c = context.palette;
-    const icons = [
-      Icons.format_bold_rounded,
-      Icons.format_italic_rounded,
-      Icons.format_list_bulleted_rounded,
-      Icons.link_rounded,
-    ];
+    final count = _descriptionController.text.length;
+    const int limit = 1000;
+    final double ratio = (count / limit).clamp(0.0, 1.0);
+    final Color barColor = ratio < 0.8
+        ? AppColors.primary
+        : (ratio < 0.95
+            ? AppColors.urgentMedium
+            : AppColors.urgentHigh);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
-        children: icons
-            .map(
-              (i) => Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Icon(i, size: 20, color: c.textSecondary),
+        children: [
+          Icon(Icons.text_fields_rounded, size: 18, color: c.textTertiary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ratio,
+                backgroundColor: c.border,
+                color: barColor,
+                minHeight: 4,
               ),
-            )
-            .toList(),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '$count / $limit',
+            style: TextStyle(
+              color: barColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

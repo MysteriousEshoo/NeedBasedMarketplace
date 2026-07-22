@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
+import '../models/need_model.dart';
 import '../providers/seller_request_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
@@ -35,16 +36,7 @@ class _SellerRegistrationSheetState extends State<SellerRegistrationSheet> {
   final _cityController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  static const List<String> _categories = [
-    'Electronics',
-    'Fashion & Apparel',
-    'Home & Furniture',
-    'Food & Groceries',
-    'Services',
-    'Vehicles',
-    'Health & Beauty',
-    'Other',
-  ];
+
 
   String? _selectedCategory;
   bool _isSubmitting = false;
@@ -346,7 +338,7 @@ class _SellerRegistrationSheetState extends State<SellerRegistrationSheet> {
             borderSide: const BorderSide(color: AppColors.primary),
           ),
         ),
-        items: _categories
+        items: MockData.sellerCategories
             .map((c) => DropdownMenuItem(value: c, child: Text(c)))
             .toList(),
         onChanged: (v) => setState(() => _selectedCategory = v),

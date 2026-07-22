@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../theme/app_colors.dart';
 
 enum Urgency {
@@ -163,10 +164,28 @@ class NeedModel {
   }
 }
 
+/// 🗂 App-wide reference data — categories, locations, etc.
+///
+/// These lists power every dropdown, filter chip and picker in the app.
+/// By default they use the hardcoded defaults below, but the moment
+/// [AppConfigService.fetch] resolves they are replaced with whatever the
+/// admin has configured in Firebase RTDB at `app_config/`.
+///
+/// This way you can add/rename categories from the Firebase console without
+/// pushing a new app version.
 class MockData {
   MockData._();
 
-  static const List<String> categories = [
+  static List<String> categories = _defaultCategories;
+  static List<String> mobileCompanies = _defaultMobileCompanies;
+  static List<String> filterChips = _defaultFilterChips;
+  static List<String> locations = _defaultLocations;
+  static List<String> sellerCategories = _defaultSellerCategories;
+  static List<String> deliveryOptions = _defaultDeliveryOptions;
+
+  // ─── Default fallbacks (used until Firebase config loads) ───────────────
+
+  static const List<String> _defaultCategories = [
     'Tech & Development',
     'Mobile Phone',
     'Local Services',
@@ -178,7 +197,7 @@ class MockData {
     'Vehicles',
   ];
 
-  static const List<String> mobileCompanies = [
+  static const List<String> _defaultMobileCompanies = [
     'Apple (iPhone)',
     'Samsung',
     'Infinix',
@@ -190,7 +209,7 @@ class MockData {
     'Others',
   ];
 
-  static const List<String> filterChips = [
+  static const List<String> _defaultFilterChips = [
     'Trending',
     'Tech',
     'Local Services',
@@ -199,7 +218,7 @@ class MockData {
     'Delivery',
   ];
 
-  static const List<String> locations = [
+  static const List<String> _defaultLocations = [
     'Karachi',
     'Lahore',
     'Islamabad',
@@ -211,4 +230,104 @@ class MockData {
     'Hyderabad',
     'Other',
   ];
+
+  static const List<String> _defaultSellerCategories = [
+    'Electronics',
+    'Fashion & Apparel',
+    'Home & Furniture',
+    'Food & Groceries',
+    'Services',
+    'Vehicles',
+    'Health & Beauty',
+    'Other',
+  ];
+
+  static const List<String> _defaultDeliveryOptions = [
+    '24 hours',
+    '3 days',
+    '1 week',
+    '2 weeks',
+    '1 month',
+    'Custom',
+  ];
+}
+
+/// 📡 Fetches reference data from Firebase RTDB so the admin can customise
+/// categories, locations etc. from the Firebase console without a new build.
+///
+/// **How to use:**
+/// Call `await AppConfigService.fetch()` once at app start (right after
+/// Firebase.initializeApp). After that, [MockData.categories] and friends
+/// are populated with the live values or fall back to the built-in defaults
+/// if the config nodes don't exist.
+///
+/// **Firebase RTDB structure to create:**
+/// ```
+/// app_config:
+///   categories:
+///     - "Tech & Development"
+///     - "Mobile Phone"
+///     …
+///   mobile_companies:
+///     - "Apple (iPhone)"
+///     …
+///   locations:
+///     - "Karachi"
+///     …
+///   seller_categories:
+///     - "Electronics"
+///     …
+///   delivery_options:
+///     - "24 hours"
+///     …
+/// ```
+class AppConfigService {
+  AppConfigService._();
+
+  /// Whether [fetch] has been called at least once.
+  static bool _hasFetched = false;
+
+  /// Call once after Firebase is initialised to load live config.
+  static Future<void> fetch() async {
+    if (_hasFetched) return;
+    _hasFetched = true;
+
+    try {
+      final ref = FirebaseDatabase.instance.ref().child('app_config');
+      final snapshot = await ref.get();
+
+      if (!snapshot.exists || snapshot.value is! Map) return;
+
+      final config = Map<String, dynamic>.from(snapshot.value as Map);
+
+      // Helper to extract a list of strings from a config node.
+      List<String> _extractList(dynamic node) {
+        if (node is! List) return [];
+        return node
+            .map((e) => e.toString())
+            .where((s) => s.trim().isNotEmpty)
+            .toList();
+      }
+
+      final cats = _extractList(config['categories']);
+      if (cats.isNotEmpty) MockData.categories = cats;
+
+      final cos = _extractList(config['mobile_companies']);
+      if (cos.isNotEmpty) MockData.mobileCompanies = cos;
+
+      final chips = _extractList(config['filter_chips']);
+      if (chips.isNotEmpty) MockData.filterChips = chips;
+
+      final locs = _extractList(config['locations']);
+      if (locs.isNotEmpty) MockData.locations = locs;
+
+      final sellerCats = _extractList(config['seller_categories']);
+      if (sellerCats.isNotEmpty) MockData.sellerCategories = sellerCats;
+
+      final delivery = _extractList(config['delivery_options']);
+      if (delivery.isNotEmpty) MockData.deliveryOptions = delivery;
+    } catch (e) {
+      debugPrint('AppConfigService: Could not load config — using defaults. ($e)');
+    }
+  }
 }
